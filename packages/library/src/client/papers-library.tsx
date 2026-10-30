@@ -274,8 +274,11 @@ export function LibraryPanel({
               const link = document.createElement('a')
               link.href = url
               link.download = 'library.bib'
+              document.body.appendChild(link)
               link.click()
-              URL.revokeObjectURL(url)
+              link.remove()
+              // Revoking in the same tick cancels the download in some browsers.
+              setTimeout(() => { URL.revokeObjectURL(url) }, 10_000)
             })
           }}
         >
