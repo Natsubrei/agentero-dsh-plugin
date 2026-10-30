@@ -1,22 +1,13 @@
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ChangeEvent, ReactNode } from 'react'
+import { X } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from './button'
-import { Input } from './input'
-import {
-  sortValue,
-  type CellCtx,
-  type ColumnKey,
-  type SortDir,
-} from './library-columns'
+import { LibraryActions } from './library-actions'
+import { controlButtonClass, sortValue, type CellCtx, type ColumnKey, type SortDir } from './library-columns'
 import { LibraryPaperRow } from './library-paper-row'
 import { LibraryTableHeader } from './library-table-header'
-import {
-  papersFrom,
-  shown,
-  type LibraryFace,
-  type PaperRow,
-} from './papers'
+import { papersFrom, shown, type LibraryFace, type PaperRow } from './papers'
 
 type LibraryPanelProps =
   PropsRuntime<'sidebar.right.pane.tab'> &
@@ -49,24 +40,23 @@ export function LibraryPanel({
   removeTag,
   deletePaper,
   download,
+  notifyError,
 }: LibraryPanelProps): ReactNode {
-  /** Rows survive a reload so a tag edit never blanks the table. */
+  // Keep the mounted table and its scroll position during background reloads.
   const [papers, setPapers] = useState<PaperRow[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [query, setQuery] = useState('')
-  const [pdfMissing, setPdfMissing] = useState(false)
   const [revision, setRevision] = useState(0)
   const [busy, setBusy] = useState(false)
-  const [banner, setBanner] = useState('')
-  const [importText, setImportText] = useState('')
-  const [keyword, setKeyword] = useState('')
   const [found, setFound] = useState<{ id: string, title: string }[]>([])
   const [sortKey, setSortKey] = useState<ColumnKey>('title')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   useEffect(() => {
     let cancelled = false
+    setLoading(true)
     loadPapers()
       .then((body) => {
         if (cancelled) return
@@ -76,11 +66,14 @@ export function LibraryPanel({
       })
       .catch((error: unknown) => {
         if (cancelled) return
-        setLoadError(error instanceof Error ? error.message : String(error))
+        const message = shown(error instanceof Error ? error.message : '', t)
+        setLoadError(message)
+        notifyError(message)
         setLoaded(true)
       })
+      .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [loadPapers, revision])
+  }, [loadPapers, notifyError, revision, t])
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -96,64 +89,44 @@ export function LibraryPanel({
   /** Resolves true when the action succeeded, so callers can clear their draft. */
   const run = useCallback((action: () => Promise<void>): Promise<boolean> => {
     setBusy(true)
-    setBanner('')
-    return action()
+    return Promise.resolve().then(action)
       .then(() => true)
       .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : ''
-        setBanner(shown(message, t))
+        notifyError(shown(error instanceof Error ? error.message : '', t))
         return false
       })
       .finally(() => { setBusy(false) })
-  }, [t])
+  }, [notifyError, t])
 
   const reload = useCallback((): void => { setRevision(value => value + 1) }, [])
-
-  const addTagFor = useCallback((ref: string, tag: string): Promise<boolean> => (
-    run(async () => {
-      await addTag(ref, tag)
-      reload()
-    })
-  ), [addTag, reload, run])
-
-  const removeTagFor = useCallback((ref: string, name: string): void => {
+  const addTagFor = useCallback((ref: string, tag: string): Promise<boolean> => run(async () => {
+    await addTag(ref, tag)
+    reload()
+  }), [addTag, reload, run])
+  const removeTagFor = useCallback((ref: string, tag: string): void => {
     void run(async () => {
-      await removeTag(ref, name)
+      await removeTag(ref, tag)
       reload()
     })
   }, [reload, removeTag, run])
-
   const openFor = useCallback((ref: string): void => {
-    setPdfMissing(!openPaper(ref))
-  }, [openPaper])
-
+    if (!openPaper(ref)) notifyError(t('pdfDisabled'))
+  }, [notifyError, openPaper, t])
   const downloadFor = useCallback((ref: string): void => {
     void run(async () => { await download(ref) })
   }, [download, run])
-
   const deleteFor = useCallback((ref: string): void => {
     void run(async () => {
       await deletePaper(ref)
       reload()
     })
   }, [deletePaper, reload, run])
-
   const ctx = useMemo<CellCtx>(() => ({
     t,
     busy,
     onAddTag: addTagFor,
     onRemoveTag: removeTagFor,
   }), [addTagFor, busy, removeTagFor, t])
-
-  const importCurrent = (): void => {
-    const text = importText.trim()
-    if (text === '') return
-    void run(async () => {
-      await importId(text)
-      setImportText('')
-      reload()
-    })
-  }
 
   const onSort = (key: ColumnKey): void => {
     if (key === sortKey) {
@@ -164,194 +137,70 @@ export function LibraryPanel({
     setSortDir(defaultSortDir(key))
   }
 
-  let body: ReactNode
-  if (!loaded) {
-    body = (
-      <div className='flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground'>
-        {t('loading')}
-      </div>
-    )
-  } else if (loadError !== '' && papers.length === 0) {
-    body = (
-      <div className='flex min-h-0 flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground'>
-        {loadError === '' ? t('loadFailed') : shown(loadError, t)}
-      </div>
-    )
-  } else {
-    body = (
-      <div className='flex min-h-0 min-w-0 flex-1 flex-col'>
-        {pdfMissing ? (
-          <p className='px-3 py-2 text-xs text-muted-foreground'>{t('pdfDisabled')}</p>
-        ) : null}
-        <div className='min-w-0'>
-          <table className='w-full min-w-[42rem] table-fixed border-collapse text-left text-sm'>
-            <colgroup>
-              <col style={{ width: '34%' }} />
-              <col style={{ width: '20%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '12%' }} />
-            </colgroup>
-            <LibraryTableHeader
-              t={t}
-              sortKey={sortKey}
-              sortDir={sortDir}
-              onSort={onSort}
-              inputValue={query}
-              onInputChange={setQuery}
-            />
-            <tbody>
-              {filtered.map(paper => (
-                <LibraryPaperRow
-                  key={paper.key}
-                  paper={paper}
-                  ctx={ctx}
-                  busy={busy}
-                  onOpen={openFor}
-                  onDownload={downloadFor}
-                  onDelete={deleteFor}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {filtered.length === 0 ? (
-          <div className='flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-8 text-center'>
-            <p className='text-sm font-medium'>
-              {papers.length === 0 ? t('empty') : t('noMatches')}
-            </p>
-          </div>
-        ) : null}
-      </div>
-    )
-  }
+  const actions = <LibraryActions
+    t={t}
+    busy={busy || loading}
+    onReload={reload}
+    onImport={(text) => run(async () => { await importId(text); reload() })}
+    onDiscover={(keyword) => run(async () => { setFound(await discover(keyword)) })}
+    onImportBib={(file) => run(async () => { await importBib(await file.text()); reload() })}
+    onExport={() => {
+      void run(async () => {
+        const blob = new Blob([await exportBib()], { type: 'application/x-bibtex' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = 'library.bib'
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        setTimeout(() => { URL.revokeObjectURL(url) }, 10_000)
+      })
+    }}
+  />
 
   return (
-    <div className='agentero-library agentero-surface box-border flex h-full min-h-0 min-w-0 w-full flex-col overflow-auto'>
-      <div className='flex flex-wrap items-center gap-1.5 border-b border-border/40 px-3 py-2'>
-        <Input
-          value={importText}
-          placeholder={t('importPlaceholder')}
-          aria-label={t('importPlaceholder')}
-          className='h-7 w-44 text-xs'
-          onChange={(event) => { setImportText(event.target.value) }}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter') return
-            importCurrent()
-          }}
-        />
-        <Button
-          type='button'
-          variant='outline'
-          size='sm'
-          disabled={busy || importText.trim() === ''}
-          onClick={importCurrent}
-        >
-          {t('importAction')}
-        </Button>
-        <Input
-          value={keyword}
-          placeholder={t('discoverPlaceholder')}
-          aria-label={t('discoverPlaceholder')}
-          className='h-7 w-32 text-xs'
-          onChange={(event) => { setKeyword(event.target.value) }}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' || keyword.trim() === '') return
-            void run(async () => { setFound(await discover(keyword.trim())) })
-          }}
-        />
-        <Button
-          type='button'
-          variant='outline'
-          size='sm'
-          disabled={busy || keyword.trim() === ''}
-          onClick={() => {
-            void run(async () => { setFound(await discover(keyword.trim())) })
-          }}
-        >
-          {t('discoverAction')}
-        </Button>
-        <Button
-          type='button'
-          variant='outline'
-          size='sm'
-          disabled={busy}
-          onClick={() => {
-            void run(async () => {
-              const text = await exportBib()
-              const blob = new Blob([text], { type: 'application/x-bibtex' })
-              const url = URL.createObjectURL(blob)
-              const link = document.createElement('a')
-              link.href = url
-              link.download = 'library.bib'
-              document.body.appendChild(link)
-              link.click()
-              link.remove()
-              // Revoking in the same tick cancels the download in some browsers.
-              setTimeout(() => { URL.revokeObjectURL(url) }, 10_000)
-            })
-          }}
-        >
-          {t('exportBib')}
-        </Button>
-        <Button
-          variant='outline'
-          size='sm'
-          asChild
-          className={busy ? 'pointer-events-none opacity-50' : undefined}
-        >
-          <label>
-            <input
-              type='file'
-              accept='.bib,.bibtex,text/plain'
-              hidden
-              disabled={busy}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const file = event.target.files?.[0]
-                event.target.value = ''
-                if (file === undefined) return
-                void run(async () => {
-                  await importBib(await file.text())
-                  reload()
-                })
-              }}
-            />
-            {t('importBib')}
-          </label>
-        </Button>
-      </div>
-      {banner === '' ? null : (
-        <p className='px-3 py-2 text-xs text-destructive'>{banner}</p>
-      )}
-      {loadError === '' || papers.length === 0 ? null : (
-        <p className='px-3 py-2 text-xs text-destructive'>
-          {shown(loadError, t)}
-        </p>
-      )}
+    <div className='agentero-library agentero-surface flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background text-foreground'>
       {found.length === 0 ? null : (
-        <div className='flex flex-wrap gap-1.5 border-b border-border/40 px-3 py-2'>
-          {found.map(item => (
-            <Button
-              key={item.id}
-              type='button'
-              variant='outline'
-              size='sm'
-              disabled={busy}
-              className='max-w-full'
-              onClick={() => {
+        <div className='flex shrink-0 items-start gap-2 border-b border-border/40 px-3 py-2'>
+          <div className='flex min-w-0 flex-1 flex-col gap-1'>
+            {found.map(item => (
+              <Button key={item.id} type='button' variant='ghost' size='sm' disabled={busy} className='w-full justify-start' title={item.title} onClick={() => {
                 void run(async () => {
                   await importId(item.id)
                   setFound(current => current.filter(row => row.id !== item.id))
                   reload()
                 })
-              }}
-            >
-              <span className='max-w-64 truncate'>{item.title}</span>
-            </Button>
-          ))}
+              }}><span className='min-w-0 truncate'>{item.title}</span></Button>
+            ))}
+          </div>
+          <button type='button' className={controlButtonClass()} aria-label={t('clearResults')} onClick={() => { setFound([]) }}><X className='size-3.5' aria-hidden /></button>
         </div>
       )}
-      {body}
+      <div data-library-scroll className='relative min-h-0 min-w-0 flex-1 overflow-auto' aria-busy={loading || busy}>
+        <table className='w-full min-w-[38rem] table-fixed border-collapse text-left text-sm'>
+          <colgroup>
+            <col />
+            <col style={{ width: '20%' }} />
+            <col style={{ width: '4.5rem' }} />
+            <col style={{ width: '24%' }} />
+            <col style={{ width: '4rem' }} />
+          </colgroup>
+          <LibraryTableHeader t={t} sortKey={sortKey} sortDir={sortDir} onSort={onSort} inputValue={query} onInputChange={setQuery} actions={actions} />
+          <tbody>
+            {filtered.map(paper => <LibraryPaperRow key={paper.key} paper={paper} ctx={ctx} busy={busy} onOpen={openFor} onDownload={downloadFor} onDelete={deleteFor} />)}
+          </tbody>
+        </table>
+        {filtered.length !== 0 ? null : (
+          <div className='sticky left-0 flex min-h-48 flex-col items-center justify-center gap-2 px-6 py-12 text-center text-sm text-muted-foreground' role='status'>
+            <span>{!loaded ? t('loading') : loadError !== '' ? loadError : papers.length === 0 ? t('empty') : t('noMatches')}</span>
+            {loadError === '' ? null : <Button variant='ghost' size='sm' disabled={loading} onClick={reload}>{t('refresh')}</Button>}
+          </div>
+        )}
+      </div>
+      <div className='shrink-0 border-t border-border/40 px-3 py-2 text-caption tabular-nums text-muted-foreground' role='status'>
+        {t(query.trim() === '' ? 'paperCount' : 'filteredCount', { count: filtered.length, total: papers.length })}
+      </div>
     </div>
   )
 }
