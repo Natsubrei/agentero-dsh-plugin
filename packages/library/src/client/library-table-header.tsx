@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { COLUMN_META, COLUMN_ORDER, SortIcon, type ColumnKey, type SortDir } from './library-columns'
 import { Input } from './input'
 import type { LibraryT } from './papers'
@@ -11,6 +12,7 @@ type LibraryTableHeaderProps = {
   onSort: (key: ColumnKey) => void
   inputValue: string
   onInputChange: (value: string) => void
+  actions: ReactNode
 }
 
 export function LibraryTableHeader({
@@ -20,6 +22,7 @@ export function LibraryTableHeader({
   onSort,
   inputValue,
   onInputChange,
+  actions,
 }: LibraryTableHeaderProps) {
   return (
     <thead
@@ -41,8 +44,8 @@ export function LibraryTableHeader({
                   type='button'
                   className={cn(
                     controlReset,
-                    'flex min-w-0 shrink cursor-grab items-center gap-1 py-0.5 text-left',
-                    'hover:text-foreground active:cursor-grabbing',
+                    'flex min-w-0 shrink cursor-pointer items-center gap-1 py-0.5 text-left',
+                    'hover:text-foreground',
                     'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                     active && 'text-foreground',
                   )}
@@ -75,8 +78,8 @@ export function LibraryTableHeader({
             </th>
           )
         })}
-        <th className='w-16 min-w-16 p-0'>
-          <div className='h-9' />
+        <th className='w-16 min-w-16 p-0 pr-2 font-normal'>
+          <div className='flex h-9 items-center justify-end'>{actions}</div>
         </th>
       </tr>
     </thead>

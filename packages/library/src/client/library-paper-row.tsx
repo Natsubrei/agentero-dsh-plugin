@@ -1,4 +1,5 @@
-import { Download, Trash2 } from 'lucide-react'
+import { BookOpen, Download, MoreHorizontal, Trash2 } from 'lucide-react'
+import { DropdownMenu } from 'radix-ui'
 import { Fragment, memo, type KeyboardEvent, type MouseEvent } from 'react'
 import {
   COLUMN_META,
@@ -7,6 +8,8 @@ import {
   type CellCtx,
 } from './library-columns'
 import type { PaperRow } from './papers'
+import { LibraryMenuContent, LibraryMenuItem } from './library-controls'
+import { cn } from './utils'
 
 type LibraryPaperRowProps = {
   paper: PaperRow
@@ -38,7 +41,7 @@ export const LibraryPaperRow = memo(function LibraryPaperRow({
 
   return (
     <tr
-      className='cursor-pointer border-b border-border/40 transition-colors duration-100 hover:bg-accent/70 active:bg-accent'
+      className='group/row cursor-pointer border-b border-border/40 transition-colors duration-100 hover:bg-accent/70 focus-visible:bg-accent/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring active:bg-accent motion-reduce:transition-none'
       tabIndex={0}
       onClick={(event: MouseEvent<HTMLTableRowElement>) => {
         if (ignoresRowOpen(event.target)) return
@@ -57,31 +60,21 @@ export const LibraryPaperRow = memo(function LibraryPaperRow({
         </Fragment>
       ))}
       <td className='w-16 min-w-16 px-2 py-2'>
-        <div className='flex items-center justify-end gap-0.5'>
-          <button
-            type='button'
-            className={controlButtonClass()}
-            aria-label={ctx.t('download')}
-            title={ctx.t('download')}
-            disabled={busy}
-            onClick={() => { onDownload(paper.openId) }}
-          >
-            <Download className='size-3.5' aria-hidden />
-          </button>
-          <button
-            type='button'
-            className={controlButtonClass('hover:bg-destructive/10 hover:text-destructive')}
-            aria-label={ctx.t('deletePaper')}
-            title={ctx.t('deletePaper')}
-            disabled={busy}
-            onClick={() => {
-              if (!window.confirm(ctx.t('confirmDelete'))) return
-              onDelete(paper.openId)
-            }}
-          >
-            <Trash2 className='size-3.5' aria-hidden />
-          </button>
-        </div>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button type='button' className={cn(controlButtonClass(), 'ml-auto opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100')} aria-label={`${ctx.t('moreActions')}: ${paper.title}`} title={ctx.t('moreActions')}>
+              <MoreHorizontal className='size-3.5' aria-hidden />
+            </button>
+          </DropdownMenu.Trigger>
+          <LibraryMenuContent align='end' onClick={(event) => { event.stopPropagation() }} onKeyDown={(event) => { event.stopPropagation() }}>
+            <LibraryMenuItem onSelect={open}><BookOpen aria-hidden />{ctx.t('openPaper')}</LibraryMenuItem>
+            <LibraryMenuItem disabled={busy} onSelect={() => { onDownload(paper.openId) }}><Download aria-hidden />{ctx.t('download')}</LibraryMenuItem>
+            <DropdownMenu.Separator className='my-1 h-px bg-border' />
+            <LibraryMenuItem className='text-destructive' disabled={busy} onSelect={() => {
+              if (window.confirm(ctx.t('confirmDelete'))) onDelete(paper.openId)
+            }}><Trash2 aria-hidden />{ctx.t('deletePaper')}</LibraryMenuItem>
+          </LibraryMenuContent>
+        </DropdownMenu.Root>
       </td>
     </tr>
   )

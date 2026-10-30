@@ -1,8 +1,7 @@
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { PaperTagChip, PaperTagRemoveButton } from './paper-tag-chip'
 import type { LibraryT, PaperRow } from './papers'
-import { TagComposer } from './tag-composer'
+import { PaperTags } from './tag-composer'
 import { cn, controlReset } from './utils'
 
 export type SortDir = 'asc' | 'desc'
@@ -39,10 +38,10 @@ export function SortIcon({ active, dir }: { active: boolean, dir: SortDir }) {
 export const COLUMN_META: Record<ColumnKey, ColumnDef> = {
   title: {
     labelKey: 'colTitle',
-    headerClassName: 'min-w-[240px]',
+    headerClassName: 'min-w-[15rem]',
     render: (paper) => (
       <td className='min-w-0 max-w-0 overflow-hidden px-3 py-2.5'>
-        <span className='block w-full min-w-0 truncate text-left font-medium'>
+        <span className='block w-full min-w-0 truncate text-left font-medium' title={paper.title || undefined}>
           {paper.title || '—'}
         </span>
       </td>
@@ -50,7 +49,7 @@ export const COLUMN_META: Record<ColumnKey, ColumnDef> = {
   },
   authors: {
     labelKey: 'colAuthors',
-    headerClassName: 'min-w-[140px]',
+    headerClassName: 'min-w-[8rem]',
     render: (paper) => (
       <td className='min-w-0 max-w-0 overflow-hidden px-3 py-2.5 text-xs text-muted-foreground'>
         <span className='block truncate' title={paper.authors || undefined}>
@@ -61,7 +60,7 @@ export const COLUMN_META: Record<ColumnKey, ColumnDef> = {
   },
   year: {
     labelKey: 'colYear',
-    headerClassName: 'min-w-[92px]',
+    headerClassName: 'min-w-[4.5rem]',
     render: (paper) => (
       <td className='whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-muted-foreground'>
         {paper.year || '—'}
@@ -70,30 +69,10 @@ export const COLUMN_META: Record<ColumnKey, ColumnDef> = {
   },
   tags: {
     labelKey: 'colTags',
-    headerClassName: 'min-w-[120px]',
+    headerClassName: 'min-w-[7rem]',
     render: (paper, ctx) => (
       <td className='min-w-0 max-w-0 overflow-hidden px-3 py-2.5'>
-        <div className='flex flex-wrap items-center gap-1'>
-          {paper.tags.map(tag => (
-            <PaperTagChip
-              key={tag.name}
-              tag={tag}
-              trailing={(
-                <PaperTagRemoveButton
-                  tagName={tag.name}
-                  label={`${ctx.t('removeTag')} ${tag.name}`}
-                  disabled={ctx.busy}
-                  onRemove={(name) => { ctx.onRemoveTag(paper.openId, name) }}
-                />
-              )}
-            />
-          ))}
-          <TagComposer
-            label={ctx.t('addTag')}
-            disabled={ctx.busy}
-            onAdd={(tag) => ctx.onAddTag(paper.openId, tag)}
-          />
-        </div>
+        <PaperTags paper={paper} t={ctx.t} busy={ctx.busy} onAdd={ctx.onAddTag} onRemove={ctx.onRemoveTag} />
       </td>
     ),
   },

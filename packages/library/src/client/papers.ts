@@ -3,6 +3,7 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 export type LibraryT = PropsLocale<'agentero.library'>['t']
 
 export interface LibraryFace {
+  notifyError(message: string): void
   loadPapers(): Promise<unknown>
   openPaper(id: string): boolean
   importId(text: string): Promise<void>

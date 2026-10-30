@@ -45,7 +45,7 @@ export function PaperTagChip({
           aria-hidden
         />
       ) : null}
-      {tag.name}
+      <span className='min-w-0 truncate'>{tag.name}</span>
       {trailing}
     </>
   )
