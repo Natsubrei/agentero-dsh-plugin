@@ -156,6 +156,16 @@ export function shown(message: string, t: LibraryT): string {
   return message
 }
 
+export async function readJson(response: Response): Promise<unknown> {
+  const text = await response.text()
+  if (text.trim() === '') return undefined
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return undefined
+  }
+}
+
 export async function postJson(url: string, body: unknown, request: (url: string, init?: RequestInit) => Promise<Response> = fetch): Promise<unknown> {
   const response = await request(url, {
     method: 'POST',
@@ -163,13 +173,7 @@ export async function postJson(url: string, body: unknown, request: (url: string
     body: JSON.stringify(body),
     cache: 'no-store',
   })
-  const text = await response.text()
-  let parsed: unknown
-  try {
-    parsed = text.trim() === '' ? undefined : JSON.parse(text) as unknown
-  } catch {
-    parsed = undefined
-  }
+  const parsed = await readJson(response)
   if (!response.ok) throw new Error(errorText(parsed) ?? '')
   return parsed
 }

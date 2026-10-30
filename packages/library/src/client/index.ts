@@ -12,6 +12,7 @@ import {
   discoverItems,
   errorText,
   postJson,
+  readJson,
   type LibraryFace,
   type VaultInfo,
 } from './papers'
@@ -181,20 +182,16 @@ export function apply(ctx: Context): void {
         method: 'PUT', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path }),
       })
-      const body: unknown = await response.json()
-      if (!response.ok) throw new Error(errorText(body) ?? '')
+      const body = await readJson(response)
+      if (!response.ok) throw new Error(errorText(body) ?? t('actionFailed'))
       // Clear every panel, PDF buffer and unsaved editor source together.
       window.location.reload()
     },
     async loadPapers() {
       const response = await request('/agentero/api/papers', { cache: 'no-store' })
-      let body: unknown
-      try {
-        body = await response.json()
-      } catch {
-        throw new Error(response.ok ? 'invalid papers response' : '')
-      }
+      const body = await readJson(response)
       if (!response.ok) throw new Error(errorText(body) ?? '')
+      if (body === undefined) throw new Error('invalid papers response')
       return body
     },
     openPaper(id) {
@@ -210,8 +207,9 @@ export function apply(ctx: Context): void {
     },
     async exportBib() {
       const response = await request('/agentero/api/export/bib', { cache: 'no-store' })
-      const body: unknown = await response.json()
-      if (!response.ok) throw new Error(errorText(body) ?? '')
+      const body = await readJson(response)
+      if (!response.ok) throw new Error(errorText(body) ?? t('actionFailed'))
+      if (body === undefined) throw new Error(t('actionFailed'))
       return bibText(body)
     },
     async discover(keyword) {

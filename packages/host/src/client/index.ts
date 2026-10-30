@@ -92,7 +92,15 @@ export function apply(ctx: Context): void {
   let source: Promise<VaultInfo> | undefined
   const getVault = (): Promise<VaultInfo> => {
     source ??= fetch('/agentero/api/vault', { cache: 'no-store' }).then(async (response) => {
-      const body: unknown = await response.json()
+      // A missing route or a crash can answer with an empty body; reading JSON
+      // directly would surface the browser's parser error as the toast.
+      const text = await response.text()
+      let body: unknown
+      try {
+        body = text.trim() === '' ? undefined : JSON.parse(text) as unknown
+      } catch {
+        body = undefined
+      }
       if (!response.ok || body === null || typeof body !== 'object'
         || !('path' in body) || typeof body.path !== 'string'
         || !('scope' in body) || typeof body.scope !== 'string') throw new Error(t('unavailable'))
