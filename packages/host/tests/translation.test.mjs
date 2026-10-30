@@ -122,3 +122,34 @@ test('translated marks persist motif geometry and result', async () => {
     const read = await readMarks(vault, 'papers/p'); assert.equal(read.marks[0].note, '译文')
   } finally { await rm(vault, { recursive: true, force: true }) }
 })
+
+test('transient translation failures retry twice with bounded backoff', async () => {
+  const { retryTranslation } = await import('../lib/translation/retry.js')
+  const delays = []
+  let calls = 0
+  const value = await retryTranslation(async () => {
+    if (++calls < 3) throw Object.assign(new Error('busy'), { status: 429 })
+    return '译文'
+  }, signal(), async ms => { delays.push(ms) })
+  assert.equal(value, '译文')
+  assert.equal(calls, 3)
+  assert.deepEqual(delays, [1000, 2000])
+  calls = 0
+  await assert.rejects(retryTranslation(async () => {
+    calls++; throw new TypeError('fetch failed')
+  }, signal(), async () => {}), /fetch failed/)
+  assert.equal(calls, 3)
+})
+
+test('terminal failures and cancellation never consume retries', async () => {
+  const { retryTranslation } = await import('../lib/translation/retry.js')
+  for (const error of [Object.assign(new Error('denied'), { status: 401 }), new Error("unexpected argument '-t' found"), Object.assign(new Error('truncated'), { code: 'TRANSLATION_INCOMPLETE' })]) {
+    let calls = 0
+    await assert.rejects(retryTranslation(async () => { calls++; throw error }, signal(), async () => assert.fail('wait')))
+    assert.equal(calls, 1)
+  }
+  const controller = new AbortController()
+  let calls = 0
+  await assert.rejects(retryTranslation(async () => { calls++; throw new Error('network failure') }, controller.signal, async () => { controller.abort() }), { name: 'AbortError' })
+  assert.equal(calls, 1)
+})

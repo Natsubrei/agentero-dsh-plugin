@@ -1,5 +1,6 @@
 /** One-shot PDF translation through the Harness model registry. No session or tools are used. */
 
+import { retryTranslation } from './translation/retry.js'
 import { buildTranslateMessages } from './translation/prompt.js'
 import { translateDocumentText } from './translation/pipeline.js'
 
@@ -39,7 +40,7 @@ export interface TranslationLlm {
       type: string
       index?: number
       block?: { type: string, text?: string }
-      reason?: { kind: string, failure?: { message: string } }
+      reason?: { kind: string, failure?: { message: string, status?: number, statusCode?: number, code?: string } }
     }>
   }>
 }
@@ -84,7 +85,7 @@ export function createTranslator(
     const llm = getLlm()
     if (llm === undefined) throw new Error('Harness LLM service is unavailable. Enable a model provider for PDF translation.')
     const operationSignal = AbortSignal.any([parentSignal, AbortSignal.timeout(300_000)])
-    const translateChunk = async (source: string): Promise<string> => {
+    const translateChunk = (source: string): Promise<string> => retryTranslation(async () => {
       const signal = AbortSignal.any([operationSignal, AbortSignal.timeout(90_000)])
       signal.throwIfAborted()
       const call = await llm.prepareCall({ provider: route.provider, model: route.model, temperature: 0.2, maxTokens: 8192 }, signal, (controls, info) => {
@@ -110,6 +111,7 @@ export function createTranslator(
         if (chunk.type === 'finish') {
           if (chunk.reason?.kind !== 'stop') {
             const error = new Error(chunk.reason?.failure?.message ?? `Translation incomplete (${chunk.reason?.kind ?? 'unknown'}). Try a smaller selection.`)
+            Object.assign(error, chunk.reason?.failure)
             if (chunk.reason?.kind === 'max-tokens') Object.assign(error, { code: 'TRANSLATION_INCOMPLETE' })
             throw error
           }
@@ -121,7 +123,7 @@ export function createTranslator(
       const result = [...blocks].sort(([a], [b]) => a - b).map(([, value]) => value).join('\n').trim()
       if (result === '') throw new Error('The model returned no translation. Please retry or select another model.')
       return result
-    }
+    }, operationSignal)
     return translateDocumentText(text, translationTarget(target), translateChunk, operationSignal)
   }
 }

@@ -48,7 +48,6 @@ import { PanDragHandler } from './pan-handler'
 import { PdfToolbar } from './pdf-toolbar'
 import { PageTranslationOverlay } from './translation/page-overlay'
 import { usePageTranslation, type TranslatedPage } from './translation/use-page-translation'
-import { Button } from './button'
 import {
   PDF_PAGE_RASTER_DARK_CLASS,
   PDF_PAPER_SHELL_CLASS,
@@ -317,11 +316,9 @@ function ReaderChrome(props: ReaderChromeProps): ReactNode {
         }}
         t={t}
       />
-      {translateOpen && (translation.error || (!translation.running && translation.pages.get(Math.max(0, page - 1))?.source.paragraphs.length === 0)) ? (
+      {translateOpen && (!translation.running && translation.pages.get(Math.max(0, page - 1))?.source.paragraphs.length === 0) ? (
         <div data-pdf-chrome role="status" className={cn('absolute top-12 right-3 z-30 max-w-80 p-2 text-xs', PDF_FLOAT_CARD)}>
-          {translation.error ? <>{t('translationFailed')} {translation.error}
-            <Button size="sm" variant="ghost" onClick={translation.retry}>{t('translationRetry')}</Button>
-          </> : t('translationEmpty')}
+          {t('translationEmpty')}
         </div>
       ) : null}
       <PdfOutlineLayer

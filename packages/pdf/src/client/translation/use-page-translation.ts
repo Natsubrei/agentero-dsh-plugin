@@ -118,11 +118,10 @@ export function usePageTranslation(options: {
               signal.throwIfAborted()
               state.error = cause instanceof Error ? cause.message : String(cause)
               setError(state.error)
-              // Keep completed regions; another model request with broken credentials cannot help.
-              if (state.translations.size === 0) throw cause
+              // A failed paragraph keeps its original pixels; continue with the rest.
             }
           }
-          state.done = state.translations.size === state.source.paragraphs.length
+          state.done = true
           cache.current.set(pageIndex, { ...state })
           publish()
         } catch (cause) {
