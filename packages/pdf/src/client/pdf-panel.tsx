@@ -58,7 +58,10 @@ export interface PdfInjected {
   loadPdf: (ref: string) => Promise<ArrayBuffer>
   loadMarks: (ref: string) => Promise<PaintMark[]>
   addMark: (body: MarkAdd) => Promise<string | undefined>
-  cite: (sessionId: string, text: string) => Promise<void>
+  /** Append the citation to this session's composer without sending it. */
+  cite: (text: string) => Promise<void>
+  /** Send a question and citation as a new conversation turn. */
+  ask: (text: string) => Promise<void>
   /** Write the PDF outline back to the file; resolves after the host saved it. */
   saveBookmarks: (ref: string, nodes: EditableBookmark[]) => Promise<void>
   /** Translate one page's text; rejects with the host error message. */
@@ -95,7 +98,7 @@ export function PdfTitle({ useTabInfo, t }: PropsRuntime<'sidebar.right.pane.tab
 }
 
 export function PdfPanel(props: PdfPanelProps): ReactNode {
-  const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, cite, saveBookmarks, translate } = props
+  const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, cite, ask, saveBookmarks, translate } = props
   const paperPath = paperRef(useTabInfo().tab.navigation.params)
   const [status, setStatus] = useState<'empty' | 'loading' | 'missing' | 'error' | 'ready'>('empty')
   const [message, setMessage] = useState('')
@@ -198,48 +201,52 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     }).finally(() => { setBusy(false) })
   }
 
-  const citeQuote = (question?: string): void => {
-    if (menu === undefined) return
+  const citeQuote = (): void => {
+    if (menu === undefined || busy) return
     if (sessionId === undefined) {
       setBanner(t('noSession'))
-      setMenu(undefined)
       return
     }
     const lines = [`${paperPath} p.${menu.page}`, menu.quote]
-    if (question !== undefined && question.trim() !== '') lines.push(question.trim())
     setBusy(true)
-    setMenu(undefined)
-    void cite(sessionId, lines.join('\n')).catch((error: unknown) => {
+    setBanner('')
+    void cite(lines.join('\n')).then(() => {
+      setMenu(undefined)
+      setBanner(t('cited'))
+    }).catch((error: unknown) => {
       const text = error instanceof Error ? error.message : ''
       setBanner(text === '' ? t('citeFailed') : text)
     }).finally(() => { setBusy(false) })
   }
 
   const submitDraft = (): void => {
-    if (menu === undefined) return
+    if (menu === undefined || busy) return
     const quote = menu.quote
     const pageNumber = menu.page
     const geometry = { rects: menu.rects, pageSize: menu.pageSize }
     if (menu.mode === 'ask') {
-      setMenu(undefined)
+      const question = draft.trim()
+      if (question === '') return
+      if (sessionId === undefined) {
+        setBanner(t('noSession'))
+        return
+      }
       setBusy(true)
-      void addMark({
-        ref: paperPath,
-        kind: 'ask',
-        quote,
-        page: pageNumber,
-        ...geometry,
-        question: draft,
-      }).then(async () => {
-        if (sessionId === undefined) {
-          setBanner(t('noSession'))
+      setBanner('')
+      void ask([`${paperPath} p.${pageNumber}`, quote, question].join('\n')).then(async () => {
+        setMenu(undefined)
+        setDraft('')
+        setBanner(t('asked'))
+        // A mark failure must not block sending or make a retry send twice.
+        try {
+          await addMark({ ref: paperPath, kind: 'ask', quote, page: pageNumber, ...geometry, question })
           refreshMarks()
-          return
+        } catch {
+          setBanner(t('askedMarkFailed'))
         }
-        await cite(sessionId, [`${paperPath} p.${pageNumber}`, quote, draft.trim()].filter(line => line !== '').join('\n'))
       }).catch((error: unknown) => {
         const text = error instanceof Error ? error.message : ''
-        setBanner(text === '' ? t('citeFailed') : text)
+        setBanner(text === '' ? t('askFailed') : text)
       }).finally(() => { setBusy(false) })
       return
     }

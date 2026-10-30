@@ -4,6 +4,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { en, zh } from './locale'
+import { pdfChatActions } from './chat-actions'
 import { normalizeHighlightColor } from './palette'
 import { PdfPanel, PdfTitle, type PaintMark, type PdfInjected } from './pdf-panel'
 
@@ -111,7 +112,7 @@ function translationOf(body: unknown): string | undefined {
 export const name = 'agentero-pdf'
 
 /** Slot services, the opener registry, and the session's right sidebar. */
-export const inject = ['slots', 'locale', 'agentero', 'sidebarRight', 'sidebarRightTabs']
+export const inject = ['slots', 'locale', 'agentero', 'sidebarRight', 'sidebarRightTabs', 'sessions', 'conversation']
 
 /**
  * Register the PDF page in the session's right sidebar and the paper opener.
@@ -133,7 +134,7 @@ export function apply(ctx: Context): void {
     ctx.sidebarRight.openTab(TAB_KIND, { params: { ref: id } })
   }))
 
-  const face: PdfInjected = {
+  const face: Omit<PdfInjected, 'cite' | 'ask'> = {
     async loadPdf(ref) {
       const response = await request(`/agentero/api/pdf?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
       if (!response.ok) {
@@ -163,16 +164,6 @@ export function apply(ctx: Context): void {
       const parsed = await parseBody(response)
       if (!response.ok) throw new Error(errorText(parsed) ?? '')
       return translationOf(parsed)
-    },
-    async cite(sessionId, text) {
-      const response = await request('/agentero/api/context', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId, text }),
-        cache: 'no-store',
-      })
-      const parsed = await parseBody(response)
-      if (!response.ok) throw new Error(errorText(parsed) ?? '')
     },
     async saveBookmarks(ref, nodes) {
       const response = await request('/agentero/api/pdf/bookmarks', {
@@ -204,7 +195,7 @@ export function apply(ctx: Context): void {
     name: 'sidebar.right.pane.tab',
     key: TAB_ID,
     locale: NS,
-    inject: () => face,
+    inject: (sessionId) => ({ ...face, ...pdfChatActions(ctx, sessionId) }),
   }, PdfPanel)))
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab.title',

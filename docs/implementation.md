@@ -289,7 +289,7 @@ Host 路由（`packages/host/src/recommend.ts`）：
 - 声明 child `agentero.pdf.notes`。槽里没有内容时 PDF 占满宽度。
 - 划词菜单：复制、高亮、批注、翻译、加入对话、快速对话。选区来自 EmbedPDF selection，`getFormattedSelection` 顺带给出页点矩形，随 `POST /agentero/api/marks` 一起提交，所以高亮、批注和 ask 不再依赖 `agentero mark add` 重新定位引文。高亮写进 `marks/annotations.json`（EmbedPDF transfer 形状，2 空格 JSON + 尾换行、按 id 去重、原子替换），ask 写 `marks/<id>.json`，矩形按页面尺寸归一化成 0–1。翻译仍走 CLI，机器翻译引擎只在那边。
 - 读标注走 `GET /agentero/api/marks?ref=`：Host 直接读 `marks/annotations.json` 和 `marks/*.json`，不再 `spawn agentero mark list`，也不再逐文件再发 `notes/file`。高亮颜色从 `custom.paletteKey` 读回并用于绘制。
-- 加入对话使用这一页的 `sessionId`，`POST /agentero/api/context`。对话留在中间，不切换主面板。没有会话时在面板里提示。这条消息进模型上下文，不自动唤醒会话。
+- 加入对话绑定 PDF 页所属的 `sessionId`，通过 Harness 的输入接口追加引用到对话草稿，保留已有文字、引用和附件，并聚焦输入框。快速对话通过该会话的 `conversation.send` 发送引用和问题，触发回复后再保存提问标注；标注保存失败不会阻止对话。发送失败保留问题供重试，不切换主面板。
 
 ### 论文笔记槽
 

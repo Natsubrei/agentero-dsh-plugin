@@ -270,6 +270,7 @@ export function SelectionMenu({
 						type="button"
 						className={TEXT_ACTION}
 						aria-label={t("ask")}
+						disabled={busy}
 						onPointerDown={(event) => event.preventDefault()}
 						onClick={onAsk}
 					>
@@ -291,13 +292,14 @@ export function SelectionMenu({
 					<input
 						className="h-7 w-52 bg-transparent px-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
 						value={draft}
+						disabled={busy}
 						placeholder={mode === "ask" ? t("askHint") : t("commentHint")}
 						autoFocus
 						onChange={(event) => {
 							onDraftChange(event.target.value);
 						}}
 						onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-							if (event.key !== "Enter") return;
+							if (event.key !== "Enter" || event.nativeEvent.isComposing || busy) return;
 							event.preventDefault();
 							onSubmitDraft();
 						}}
@@ -305,7 +307,7 @@ export function SelectionMenu({
 					<button
 						type="button"
 						className={TEXT_ACTION}
-						disabled={busy}
+						disabled={busy || (mode === "ask" && draft.trim() === "")}
 						onClick={onSubmitDraft}
 					>
 						{mode === "ask" ? t("send") : t("save")}
