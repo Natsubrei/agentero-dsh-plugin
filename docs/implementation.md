@@ -78,8 +78,9 @@ agentero-dsh-plugin/
       name: agentero-dsh-notes
     - id: agentero-pdf
       name: agentero-dsh-pdf
-    - id: agentero-recommend
-      name: agentero-dsh-recommend
+    # 暂时停用：推荐卡片条不再加载
+    # - id: agentero-recommend
+    #   name: agentero-dsh-recommend
 ```
 
 | loader id | npm 名 | Node `name` | 浏览器入口 | 主面板 key | 侧栏 order |
@@ -88,7 +89,7 @@ agentero-dsh-plugin/
 | `agentero-library` | `agentero-dsh-library` | `agentero-library` | `agentero-library` | `agentero.library` | 30 |
 | `agentero-notes` | `agentero-dsh-notes` | `agentero-notes` | `agentero-notes` | `agentero.notes` | 31 |
 | `agentero-pdf` | `agentero-dsh-pdf` | `agentero-pdf` | `agentero-pdf` | `agentero.pdf` | 32 |
-| `agentero-recommend` | `agentero-dsh-recommend` | `agentero-recommend` | `agentero-recommend` | 无（输入框下方卡片条） | 无 |
+| `agentero-recommend` | `agentero-dsh-recommend` | `agentero-recommend` | `agentero-recommend` | 无（输入框下方卡片条） | 无（当前未加载） |
 
 类型解析靠各包 `tsconfig.json` / `tsconfig.client.json` 的 `paths`，指向 `../../../deepseek-harness/...` 已构建的 `lib/types`。没有旁边这份 harness 检出时，`pnpm install` 的 `prepare` 会失败。不要把插件写进 harness 的 `pnpm-workspace.yaml`。
 
