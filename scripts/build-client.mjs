@@ -27,6 +27,24 @@ const plugins = [
   },
 ]
 
+if (pkg.name === 'agentero-dsh-notes') {
+  plugins.push({
+    name: 'katex-css-stub',
+    setup(build) {
+      // MathML output does not need KaTeX fonts. The math plugin still imports
+      // katex.min.css, and those relative font urls cannot be bundled here.
+      build.onResolve({ filter: /katex\.min\.css$/ }, (args) => ({
+        path: args.path,
+        namespace: 'katex-css-stub',
+      }))
+      build.onLoad({ filter: /.*/, namespace: 'katex-css-stub' }, () => ({
+        contents: '',
+        loader: 'js',
+      }))
+    },
+  })
+}
+
 if (pkg.name === 'agentero-dsh-pdf') {
   plugins.push({
     name: 'pdfium-wasm-base',

@@ -1,10 +1,9 @@
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useAutosave } from './autosave'
 import { FileTree, FileTreeFile } from './file-tree'
-import { NoteMarkdown } from './markdown'
 import { messageOf, shown } from './messages'
-import { NoteEditor, NoteReadView } from './note-chrome'
-import { NoteToolbar } from './toolbar'
+import { PlateNote } from './plate-note'
 import type { NoteListItem, NotesFace } from './types'
 
 const ROOT = 'agentero-notes agentero-surface box-border flex h-full min-h-0 min-w-0 overflow-hidden font-sans [&_*]:box-border'
@@ -43,11 +42,11 @@ export function NotesPanel({
   const [list, setList] = useState<ListStatus>({ kind: 'loading' })
   const [selected, setSelected] = useState<string | undefined>(undefined)
   const [doc, setDoc] = useState<DocStatus>({ kind: 'idle' })
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const [saving, setSaving] = useState(false)
   const [writeError, setWriteError] = useState<string | undefined>(undefined)
   const ticket = useRef(0)
+  const saveMarkdown = useAutosave(doc.kind === 'ready' ? doc.path : '', writeNote, (message) => {
+    setWriteError(message === '' ? undefined : message)
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -65,8 +64,6 @@ export function NotesPanel({
   useEffect(() => {
     const current = ticket.current + 1
     ticket.current = current
-    setSaving(false)
-    setEditing(false)
     setWriteError(undefined)
     if (selected === undefined) {
       setDoc({ kind: 'idle' })
@@ -78,7 +75,6 @@ export function NotesPanel({
       .then((note) => {
         if (cancelled || ticket.current !== current) return
         setDoc({ kind: 'ready', path: note.path, text: note.text })
-        setDraft(note.text)
       })
       .catch((error: unknown) => {
         if (cancelled || ticket.current !== current) return
@@ -89,43 +85,6 @@ export function NotesPanel({
       ticket.current += 1
     }
   }, [selected, readNote])
-
-  const save = (): void => {
-    if (doc.kind !== 'ready' || saving) return
-    const current = ticket.current
-    const path = doc.path
-    const text = draft
-    setSaving(true)
-    setWriteError(undefined)
-    writeNote(path, text)
-      .then(async () => {
-        if (ticket.current !== current) return
-        setDoc({ kind: 'ready', path, text })
-        setDraft(text)
-        setEditing(false)
-        try {
-          const notes = await loadNotes()
-          if (ticket.current !== current) return
-          setList({ kind: 'ready', notes })
-        } catch {
-          // The file is already saved. Keep the list on screen.
-        }
-      })
-      .catch((error: unknown) => {
-        if (ticket.current !== current) return
-        setWriteError(messageOf(error))
-      })
-      .finally(() => {
-        if (ticket.current === current) setSaving(false)
-      })
-  }
-
-  const cancel = (): void => {
-    if (doc.kind !== 'ready') return
-    setDraft(doc.text)
-    setEditing(false)
-    setWriteError(undefined)
-  }
 
   if (list.kind === 'loading') {
     return (
@@ -167,30 +126,15 @@ export function NotesPanel({
   } else {
     reader = (
       <>
-        <NoteToolbar
-          editing={editing}
-          busy={saving}
-          editLabel={t('edit')}
-          saveLabel={t('save')}
-          cancelLabel={t('cancel')}
-          onEdit={() => {
-            setDraft(doc.text)
-            setWriteError(undefined)
-            setEditing(true)
-          }}
-          onSave={save}
-          onCancel={cancel}
-        />
         {writeError === undefined ? null : (
           <p className="px-3 pt-2 text-destructive text-sm">{shown(writeError, t('saveFailed'), t)}</p>
         )}
-        {editing ? (
-          <NoteEditor value={draft} label={t('edit')} onChange={setDraft} />
-        ) : (
-          <NoteReadView>
-            <NoteMarkdown text={doc.text} />
-          </NoteReadView>
-        )}
+        <PlateNote
+          key={doc.path}
+          markdown={doc.text}
+          onMarkdown={saveMarkdown}
+          t={t}
+        />
       </>
     )
   }

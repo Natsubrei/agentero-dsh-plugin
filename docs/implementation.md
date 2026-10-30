@@ -221,9 +221,9 @@ open(kind, id): boolean
 文件：`packages/notes/src/client/index.ts`。
 
 - 同样三个 inject。语言包 `agentero.notes`，中文标题「笔记」。
-- 左列表、右阅读。`renderNote` 自己把 Markdown 收成 React 节点：标题、段落、列表、围栏代码。`[[...]]` 原样显示，不解析。
-- 编辑是 textarea。保存 `PUT` 之后回到渲染。
-- 只覆盖 `notes/`。论文 `NOTES.md` 还没有入口。
+- 左列表、右正文。打开就是 Plate，没有单独的阅读/编辑切换。磁盘仍是 Markdown：打开时反序列化，改动停顿后序列化再 `PUT`。`[[...]]` 原样显示，不解析。
+- 节点包括段落、标题、行内样式、列表、引用、分隔线、围栏代码、链接、表格和公式。公式用 KaTeX 的 MathML，不打包字体。光标在正文里时，底部浮出格式条。查找用 Cmd/Ctrl+F，不占常驻一行。
+- 只覆盖 `notes/`。论文 `NOTES.md` 走同一个编辑器，入口在 PDF 页的笔记槽。
 
 ### PDF 表面
 
@@ -292,7 +292,7 @@ children: {
 
 面板在 PDF 右侧 `renderSlot('agentero.pdf.notes', { paperPath })`。槽空着就只画 PDF。
 
-笔记包 `ctx.slots.inject('agentero.pdf.notes', () => register(...))`。组件用已有的 `renderNote` 和读写回调。读：`GET /agentero/api/notes/file?path=` + `paperPath + '/NOTES.md'`（注意 path 已含 `papers/...`，不要再加前缀；拼接前规范化斜杠）。写：现有 PUT 拒绝 `notes/` 以外的路径。要保存论文笔记，必须给 PUT 增加一条允许：Vault 相对路径匹配 `papers/<单段>/NOTES.md`，仍然禁止 `..` 和跑出 Vault。不要把任意文件的写权限放开。
+笔记包 `ctx.slots.inject('agentero.pdf.notes', () => register(...))`。组件用笔记包里的 Plate 编辑器和读写回调。读：`GET /agentero/api/notes/file?path=` + `paperPath + '/NOTES.md'`（注意 path 已含 `papers/...`，不要再加前缀；拼接前规范化斜杠）。写：现有 PUT 拒绝 `notes/` 以外的路径。要保存论文笔记，必须给 PUT 增加一条允许：Vault 相对路径匹配 `papers/<单段>/NOTES.md`，仍然禁止 `..` 和跑出 Vault。不要把任意文件的写权限放开。
 
 笔记库列表仍然只列 `notes/`，不要把每篇论文的 `NOTES.md` 再列进去。
 

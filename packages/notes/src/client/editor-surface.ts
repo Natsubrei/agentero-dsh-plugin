@@ -17,11 +17,12 @@ export const editorClassName = cn(
 )
 
 /**
- * Content inset from `markdown-editor.tsx`. `pl-10` / `pr-14` are the editor
- * gutters (block handle and TOC strip). Those controls are not in this panel.
+ * Desktop gutters (`pl-10` / `pr-14`) exist for the block handle and TOC.
+ * This column is a sidebar, so the inset stays small enough for a heading to
+ * sit on one line.
  */
 export const editorContentClassName =
-  'min-h-full pl-10 pr-14 pt-4 pb-48 @max-2xs/editor:pr-6 [&>*:first-child]:mt-0'
+  'min-h-full px-4 pt-2 pb-16 [&>*:first-child]:mt-0'
 
 /** Defaults from Agentero settings: `editorFontSize` 14, line-height 1.6. */
 export const editorTextStyle: CSSProperties = {
