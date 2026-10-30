@@ -50,9 +50,10 @@ export function LibraryPanel({
   deletePaper,
   download,
 }: LibraryPanelProps): ReactNode {
-  const [status, setStatus] = useState<
-    { kind: 'loading' } | { kind: 'error', message: string } | { kind: 'ready', papers: PaperRow[] }
-  >({ kind: 'loading' })
+  /** Rows survive a reload so a tag edit never blanks the table. */
+  const [papers, setPapers] = useState<PaperRow[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [query, setQuery] = useState('')
   const [pdfMissing, setPdfMissing] = useState(false)
   const [revision, setRevision] = useState(0)
@@ -67,21 +68,21 @@ export function LibraryPanel({
 
   useEffect(() => {
     let cancelled = false
-    setStatus({ kind: 'loading' })
     loadPapers()
       .then((body) => {
         if (cancelled) return
-        setStatus({ kind: 'ready', papers: papersFrom(body) })
+        setPapers(papersFrom(body))
+        setLoadError('')
+        setLoaded(true)
       })
       .catch((error: unknown) => {
         if (cancelled) return
-        const message = error instanceof Error ? error.message : String(error)
-        setStatus({ kind: 'error', message })
+        setLoadError(error instanceof Error ? error.message : String(error))
+        setLoaded(true)
       })
     return () => { cancelled = true }
   }, [loadPapers, revision])
 
-  const papers = status.kind === 'ready' ? status.papers : []
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
     const matched = needle === ''
@@ -124,16 +125,16 @@ export function LibraryPanel({
   }
 
   let body: ReactNode
-  if (status.kind === 'loading') {
+  if (!loaded) {
     body = (
       <div className='flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground'>
         {t('loading')}
       </div>
     )
-  } else if (status.kind === 'error') {
+  } else if (loadError !== '' && papers.length === 0) {
     body = (
       <div className='flex min-h-0 flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground'>
-        {status.message === '' ? t('loadFailed') : shown(status.message, t)}
+        {loadError === '' ? t('loadFailed') : shown(loadError, t)}
       </div>
     )
   } else {
@@ -308,6 +309,9 @@ export function LibraryPanel({
       </div>
       {banner === '' ? null : (
         <p className='px-3 py-2 text-xs text-destructive'>{banner}</p>
+      )}
+      {loadError === '' || papers.length === 0 ? null : (
+        <p className='px-3 py-2 text-xs text-destructive'>{shown(loadError, t)}</p>
       )}
       {found.length === 0 ? null : (
         <div className='flex flex-wrap gap-1.5 border-b border-border/40 px-3 py-2'>
