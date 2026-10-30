@@ -28,6 +28,19 @@
 		color: inherit;
 		background-color: transparent;
 	}
+
+	/*
+	 * Surface defaults live in the base layer so `text-*` / `font-*` utilities
+	 * still win. Unlayered here, `color: var(--foreground)` would beat
+	 * `text-background` on portalled tooltips and paint the label in the same
+	 * ink as its own background.
+	 */
+	.agentero-surface {
+		color: var(--foreground);
+		font-family: var(--agentero-font-sans);
+		font-size: 0.8125rem;
+		line-height: 1.3846;
+	}
 }
 
 /*
@@ -200,10 +213,6 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   color-scheme: light;
-  color: var(--foreground);
-  font-family: var(--agentero-font-sans);
-  font-size: 0.8125rem;
-  line-height: 1.3846;
   height: 100%;
   min-height: 0;
   min-width: 0;
