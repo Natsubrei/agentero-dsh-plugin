@@ -55,7 +55,7 @@ cd ..
 cargo build -p agentero-cli
 ```
 
-宿主的 `pnpm run build` 生成仓库产物，之后 `pnpm dsh` 直接使用这些产物。已经构建过就可以跳过。插件的 `prepare` 会构建五个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。需要单独重建时运行 `corepack pnpm build`；只做类型检查时运行 `corepack pnpm typecheck`。
+宿主的 `pnpm run build` 生成仓库产物，之后 `pnpm dsh` 直接使用这些产物。已经构建过就可以跳过。插件的 `prepare` 会构建五个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。需要单独重建时运行 `corepack pnpm build`；只做类型检查时运行 `corepack pnpm typecheck`，旁边的 `deepseek-harness` 检出要包含 `@deepseek-ai/dsh-client-ui-conversation` 的 `lib/types`，推荐卡片条注册的 `conversation.input.dock` 由它声明。
 
 五个包把 `@deepseek-ai/cordis` 放在 `peerDependencies`。根 `package.json` 用 `file:./packages/host` 等依赖这五个包名，方便 profile 安装时解析。
 
@@ -86,7 +86,7 @@ Vault 和 CLI 路径写在本机 profile，不写进会提交的 `cordis.patch.y
 corepack pnpm dsh web --no-open
 ```
 
-终端出现 `[agentero] plugin loaded` 后，用它打印的 `http://127.0.0.1:3080/?token=...` 打开。进入一个会话，右侧开始页有「文献」「笔记」和「推荐」。点文献表里的一行打开 PDF。只看界面时不需要 DeepSeek API key。
+终端出现 `[agentero] plugin loaded` 后，用它打印的 `http://127.0.0.1:3080/?token=...` 打开。进入一个会话，右侧开始页有「文献」和「笔记」，输入框下方是推荐卡片条。点文献表里的一行打开 PDF。只看界面时不需要 DeepSeek API key。
 
 卸下插件：
 
@@ -116,7 +116,7 @@ profile 目录不属于任何一个 Git 仓库。
 
 每个包的 Node 入口导出 `name` 与 `apply`。带界面的包另外声明 `dsh.client.platform: web`，`exports["./client"]` 指向 `lib/client.js`。这个文件以 `window.__ModuleLoader__.load` 开头，React 和 `@deepseek-ai/dsh-client-*` 保持为外部 `require()`。
 
-Host 的 Node 插件名是 `agentero-host`。它读取可选配置 `vault`（默认 `""`）、`agenteroBin`（默认 `"agentero"`）和 `agenteroSettings`（默认 `$XDG_CONFIG_HOME/agentero/settings.json`），并在加载时打印 `[agentero] plugin loaded`。浏览器入口提供名为 `agentero` 的服务。Host 在 `/agentero/api` 下提供论文列表、PDF 字节、标注，以及 `<vault>/notes` 的笔记列表和文件读写；`/agentero/api/recommend` 提供 arXiv 每日推荐、知乎检索和推荐设置。`PUT` 还可以写 `papers/<id>/NOTES.md`。文献面板列出论文。笔记面板列出并编辑 `notes/`，并填进 PDF 右侧的论文笔记槽。PDF 面板用 EmbedPDF / PDFium 阅读，划词后调用 `agentero mark add`。推荐面板读取 Agentero 的 Embedding / 知乎凭证，缺少时可以在面板内保存到 `$XDG_CONFIG_HOME/agentero/dsh-recommend.json`。Host 另外提供 `GET /agentero/api/pdfium.wasm`。
+Host 的 Node 插件名是 `agentero-host`。它读取可选配置 `vault`（默认 `""`）、`agenteroBin`（默认 `"agentero"`）和 `agenteroSettings`（默认 `$XDG_CONFIG_HOME/agentero/settings.json`），并在加载时打印 `[agentero] plugin loaded`。浏览器入口提供名为 `agentero` 的服务。Host 在 `/agentero/api` 下提供论文列表、PDF 字节、标注，以及 `<vault>/notes` 的笔记列表和文件读写；`/agentero/api/recommend` 提供 arXiv 每日推荐、知乎检索和推荐设置。`PUT` 还可以写 `papers/<id>/NOTES.md`。文献面板列出论文。笔记面板列出并编辑 `notes/`，并填进 PDF 右侧的论文笔记槽。PDF 面板用 EmbedPDF / PDFium 阅读，划词后调用 `agentero mark add`。推荐卡片条读取 Agentero 的 Embedding / 知乎凭证，缺少时可以在条内的设置里保存到 `$XDG_CONFIG_HOME/agentero/dsh-recommend.json`。Host 另外提供 `GET /agentero/api/pdfium.wasm`。
 
 生效配置从空根开始，按这个顺序叠层：
 
