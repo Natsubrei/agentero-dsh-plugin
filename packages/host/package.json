@@ -1,0 +1,52 @@
+{
+  "name": "agentero-dsh-host",
+  "version": "0.1.0",
+  "description": "Agentero host plugin for DeepSeek Harness",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/index.d.ts",
+    "lib/index.js.map",
+    "lib/notes-files.js",
+    "lib/notes-files.d.ts",
+    "lib/notes-files.js.map",
+    "lib/pdf-file.js",
+    "lib/pdf-file.d.ts",
+    "lib/pdf-file.js.map",
+    "lib/cli-run.js",
+    "lib/cli-run.d.ts",
+    "lib/cli-run.js.map",
+    "lib/catalog.js",
+    "lib/catalog.d.ts",
+    "lib/catalog.js.map",
+    "lib/tools.js",
+    "lib/tools.d.ts",
+    "lib/tools.js.map",
+    "lib/client.js",
+    "lib/client/index.d.ts"
+  ],
+  "dsh": {
+    "client": {
+      "platform": "web"
+    }
+  },
+  "dependencies": {
+    "@embedpdf/pdfium": "2.14.4"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5"
+  }
+}

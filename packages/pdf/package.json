@@ -1,0 +1,55 @@
+{
+  "name": "agentero-dsh-pdf",
+  "version": "0.1.0",
+  "description": "Agentero PDF panel for DeepSeek Harness",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/index.d.ts",
+    "lib/index.js.map",
+    "lib/client.js",
+    "lib/client/index.d.ts"
+  ],
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": ["agentero-dsh-host"]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.554.0",
+    "@embedpdf/core": "2.14.4",
+    "@embedpdf/engines": "2.14.4",
+    "@embedpdf/models": "2.14.4",
+    "@embedpdf/plugin-document-manager": "2.14.4",
+    "@embedpdf/plugin-interaction-manager": "2.14.4",
+    "@embedpdf/plugin-render": "2.14.4",
+    "@embedpdf/plugin-scroll": "2.14.4",
+    "@embedpdf/plugin-selection": "2.14.4",
+    "@embedpdf/plugin-spread": "2.14.4",
+    "@embedpdf/plugin-tiling": "2.14.4",
+    "@embedpdf/plugin-viewport": "2.14.4",
+    "@embedpdf/plugin-zoom": "2.14.4",
+    "motion": "^12.42.2",
+    "radix-ui": "^1.4.3",
+    "tailwind-merge": "^3.3.1"
+  }
+}

@@ -1,3 +1,9 @@
 - insert:
-    - id: agentero
-      name: agentero-dsh-plugin
+    - id: agentero-host
+      name: agentero-dsh-host
+    - id: agentero-library
+      name: agentero-dsh-library
+    - id: agentero-notes
+      name: agentero-dsh-notes
+    - id: agentero-pdf
+      name: agentero-dsh-pdf

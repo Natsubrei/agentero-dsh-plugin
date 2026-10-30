@@ -1,0 +1,151 @@
+import { motion, useReducedMotion } from "motion/react";
+import { type Ref, useCallback, useState } from "react";
+import type { PropsLocale } from "@deepseek-ai/dsh-client-ui-slots";
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "./tooltip";
+import { cn } from "./cn";
+import {
+	HIGHLIGHT_COLORS,
+	type HighlightColor,
+	swatchColorClass,
+} from "./palette";
+
+/** Visual size of each color dot (px). */
+const CARD = 16;
+/** Collapsed center-to-center step — ~50% overlap. */
+const COLLAPSED_STEP = 8;
+/** Expanded center-to-center step — card + gap. */
+const EXPANDED_STEP = 20;
+/** Hit padding around the card so the target stays ≥ 24px (WCAG 2.5.8). */
+const HIT_PAD = 4;
+
+const COUNT = HIGHLIGHT_COLORS.length;
+const BTN = CARD + HIT_PAD * 2;
+
+export const HIGHLIGHT_COLOR_STACK_COLLAPSED_W =
+	BTN + (COUNT - 1) * COLLAPSED_STEP;
+export const HIGHLIGHT_COLOR_STACK_EXPANDED_W =
+	BTN + (COUNT - 1) * EXPANDED_STEP;
+const SLOT_H = BTN;
+
+const SPRING = { type: "spring" as const, bounce: 0.2, duration: 0.32 };
+const SNAP = { type: "tween" as const, duration: 0 };
+
+type PdfT = PropsLocale<"agentero.pdf">["t"];
+
+const COLOR_LABEL = {
+	yellow: "colorYellow",
+	green: "colorGreen",
+	blue: "colorBlue",
+	pink: "colorPink",
+	purple: "colorPurple",
+} as const;
+
+type HighlightColorStackProps = {
+	ref?: Ref<HTMLFieldSetElement>;
+	onSelect: (color: HighlightColor) => void;
+	/** Currently active color (annotation recolor menu). */
+	activeColor?: HighlightColor;
+	/** Tooltip / expand direction relative to the toolbar. */
+	tooltipSide?: "top" | "bottom";
+	className?: string;
+	t: PdfT;
+};
+
+/**
+ * Semi-overlapping highlight color dots. Hover / focus-within fans them out
+ * to the left (right edge stays anchored near the toolbar divider) with a
+ * compact spring. Only this slot's width animates — parents should pin the
+ * toolbar by its right edge so sibling actions do not move.
+ */
+export function HighlightColorStack({
+	ref,
+	onSelect,
+	activeColor,
+	tooltipSide = "top",
+	className,
+	t,
+}: HighlightColorStackProps) {
+	const reduceMotion = useReducedMotion();
+	const [expanded, setExpanded] = useState(false);
+
+	const open = useCallback(() => setExpanded(true), []);
+	const close = useCallback(() => setExpanded(false), []);
+
+	const step = expanded ? EXPANDED_STEP : COLLAPSED_STEP;
+	const width = expanded
+		? HIGHLIGHT_COLOR_STACK_EXPANDED_W
+		: HIGHLIGHT_COLOR_STACK_COLLAPSED_W;
+	const transition = reduceMotion ? SNAP : SPRING;
+
+	return (
+		<motion.fieldset
+			ref={ref}
+			className={cn("relative m-0 min-w-0 shrink-0 border-0 p-0", className)}
+			initial={false}
+			animate={{ width }}
+			transition={transition}
+			style={{ height: SLOT_H }}
+			onMouseEnter={open}
+			onMouseLeave={close}
+			onFocusCapture={open}
+			onBlurCapture={(e) => {
+				if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+					close();
+				}
+			}}
+			aria-label={t("colorGroup")}
+		>
+			{HIGHLIGHT_COLORS.map((color, i) => {
+				// Purple (last) anchors at the right; yellow fans furthest left.
+				const fromRight = (COUNT - 1 - i) * step;
+				const isActive = activeColor === color;
+				return (
+					<Tooltip key={color}>
+						<TooltipTrigger asChild>
+							<motion.button
+								type="button"
+								aria-label={t(COLOR_LABEL[color])}
+								aria-pressed={activeColor ? isActive : undefined}
+								className={cn(
+									"absolute top-0 inline-flex items-center justify-center rounded-full outline-none",
+									"focus-visible:ring-2 focus-visible:ring-ring/50",
+									"active:scale-[0.94] motion-reduce:active:scale-100",
+								)}
+								style={{
+									width: BTN,
+									height: BTN,
+									// Yellow stays on top when collapsed so the stack keeps
+									// the same overlap order as the text-selection toolbar.
+									zIndex: COUNT - i,
+								}}
+								initial={false}
+								animate={{ right: fromRight }}
+								transition={transition}
+								onClick={() => onSelect(color)}
+							>
+								<span
+									className={cn(
+										// Dark edge so overlapping dots stay separable.
+										"block size-4 rounded-full shadow-sm ring-1 ring-black/55 transition-[box-shadow] dark:ring-black/70 dark:ring-offset-0",
+										swatchColorClass(color),
+										isActive &&
+											"ring-2 ring-foreground/70 ring-offset-1 ring-offset-background",
+										expanded && "shadow-md",
+									)}
+									aria-hidden
+								/>
+							</motion.button>
+						</TooltipTrigger>
+						<TooltipContent side={tooltipSide}>
+							{t(COLOR_LABEL[color])}
+						</TooltipContent>
+					</Tooltip>
+				);
+			})}
+		</motion.fieldset>
+	);
+}

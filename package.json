@@ -8,36 +8,33 @@
     "node": ">=24.9.0",
     "dsh": ">=0.2.1-rc.5 <0.3.0"
   },
-  "main": "./lib/index.js",
-  "types": "./lib/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./lib/index.d.ts",
-      "default": "./lib/index.js"
-    },
-    "./package.json": "./package.json"
-  },
   "files": [
-    "lib/index.js",
-    "lib/index.d.ts",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "pnpm-workspace.yaml",
+    "packages"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "prepare": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "build": "node scripts/build-all.mjs",
+    "prepare": "node scripts/build-all.mjs",
+    "typecheck": "node scripts/build-all.mjs --noEmit"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
   },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "~4.0.5"
+  "dependencies": {
+    "agentero-dsh-host": "file:./packages/host",
+    "agentero-dsh-library": "file:./packages/library",
+    "agentero-dsh-notes": "file:./packages/notes",
+    "agentero-dsh-pdf": "file:./packages/pdf"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "~4.0.5",
+    "@tailwindcss/cli": "^4.1.16",
     "@types/node": "^24.10.1",
+    "@types/react": "^18.3.18",
+    "esbuild": "^0.25.0",
+    "tailwindcss": "^4.1.16",
     "typescript": "^6.0.3"
   },
   "repository": {

@@ -64,9 +64,9 @@ cd motif/agentero-dsh-plugin
 corepack pnpm install
 ```
 
-`prepare` 会执行 `tsc`，生成 `lib/`。`lib/` 和 `node_modules/` 不提交。需要单独重建时运行 `corepack pnpm build`；只做类型检查时运行 `corepack pnpm typecheck`。
+`prepare` 会构建四个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。需要单独重建时运行 `corepack pnpm build`；只做类型检查时运行 `corepack pnpm typecheck`。类型检查通过旁边的 `deepseek-harness` 检出解析 Cordis 与 client 包的类型。
 
-和宿主共用实例的包同时放在 `peerDependencies` 与 `devDependencies`，目前是 `@deepseek-ai/cordis`。插件自己的运行时依赖才放进 `dependencies`。
+四个包把 `@deepseek-ai/cordis` 放在 `peerDependencies`。根 `package.json` 用 `file:./packages/host` 等依赖这四个包名，方便 profile 安装时解析。
 
 ## 链接到 profile
 
@@ -78,13 +78,13 @@ corepack pnpm dsh plugin --profile agentero add ../agentero-dsh-plugin
 corepack pnpm dsh --profile agentero --dump-config
 ```
 
-`--dump-config` 里应能看到一层 `# == agentero-dsh-plugin`。然后启动 Web UI：
+`--dump-config` 里应能看到 `# == agentero-dsh-plugin`，以及 `agentero-host`、`agentero-library`、`agentero-notes`、`agentero-pdf` 四行。然后启动 Web UI：
 
 ```sh
 corepack pnpm dsh web --profile agentero --no-open
 ```
 
-终端出现 `[agentero] plugin loaded` 即表示组合包已被加载。浏览器打开 `http://127.0.0.1:3080`。
+终端出现 `[agentero] plugin loaded` 即表示 host 入口已被加载。打开一个会话后，右栏开始页应有文献和笔记。PDF 从文献表打开。
 
 卸下插件：
 
@@ -96,39 +96,23 @@ profile 数据在 `$DSH_HOME/profiles/agentero`（未设置 `DSH_HOME` 时是 `~
 
 ## 插件在仓库里的形态
 
-```text
-agentero-dsh-plugin/
-├── package.json       # dsh.bundle 指向 patch
-├── cordis.patch.yml   # 按包名插入插件行
-├── src/index.ts       # 导出 name 与 apply
-├── tsconfig.json
-└── lib/               # tsc 产物，不提交
-```
-
-`cordis.patch.yml` 用包名引用入口，让 Node 解析已安装的代码：
+根目录是组合包，不自己导出 `apply`。`cordis.patch.yml` 按包名插入四个 loader 行：
 
 ```yaml
 - insert:
-    - id: agentero
-      name: agentero-dsh-plugin
+    - id: agentero-host
+      name: agentero-dsh-host
+    - id: agentero-library
+      name: agentero-dsh-library
+    - id: agentero-notes
+      name: agentero-dsh-notes
+    - id: agentero-pdf
+      name: agentero-dsh-pdf
 ```
 
-入口是一个导出 `apply` 的模块。框架加载时调用它，并通过 `ctx` 注册能力。`ctx.effect()` 的返回函数会在插件卸载时执行。
+每个包的 Node 入口导出 `name` 与 `apply`。带界面的包另外声明 `dsh.client.platform: web`，`exports["./client"]` 指向 `lib/client.js`。这个文件以 `window.__ModuleLoader__.load` 开头，React 和 `@deepseek-ai/dsh-client-*` 保持为外部 `require()`。
 
-```ts
-import type { Context } from '@deepseek-ai/cordis'
-
-export const name = 'agentero'
-
-export function apply(ctx: Context) {
-  ctx.effect(() => {
-    console.log('[agentero] plugin loaded')
-    return () => {
-      console.log('[agentero] plugin unloaded')
-    }
-  })
-}
-```
+Host 的 Node 插件名是 `agentero-host`。它读取可选配置 `vault`（默认 `""`）和 `agenteroBin`（默认 `"agentero"`），并在加载时打印 `[agentero] plugin loaded`。浏览器入口提供名为 `agentero` 的服务。Host 在 `/agentero/api` 下提供论文列表、PDF 字节、标注，以及 `<vault>/notes` 的笔记列表和文件读写。`PUT` 还可以写 `papers/<id>/NOTES.md`。文献面板列出论文。笔记面板列出并编辑 `notes/`，并填进 PDF 右侧的论文笔记槽。PDF 面板用 EmbedPDF / PDFium 阅读，划词后调用 `agentero mark add`。Host 另外提供 `GET /agentero/api/pdfium.wasm`。
 
 生效配置从空根开始，按这个顺序叠层：
 
@@ -141,7 +125,7 @@ export function apply(ctx: Context) {
 
 ## 日常改代码
 
-1. 改 `src/`。
+1. 改对应包的 `packages/<name>/src/`。
 2. 在本仓库运行 `corepack pnpm build`。
 3. 重启 `corepack pnpm dsh web --profile agentero`。
 
@@ -151,8 +135,8 @@ export function apply(ctx: Context) {
 
 ```yaml
 - insert:
-    - id: agentero
-      name: '/绝对路径/motif/agentero-dsh-plugin/src/index.ts'
+    - id: agentero-host
+      name: '/绝对路径/motif/agentero-dsh-plugin/packages/host/src/index.ts'
 ```
 
 然后：
@@ -172,7 +156,7 @@ corepack pnpm dsh web --profile agentero --patch ../agentero-dsh-plugin/dev.patc
 dsh plugin --profile agentero add github:poco-ai/agentero-dsh-plugin
 ```
 
-Git 安装拿到的是源码。`prepare` 会在安装后编译 `lib/`。pnpm 10 及以上默认不跑 Git 依赖的构建脚本，第一次 `add` 可能失败。按 CLI 提示把包名写入该 profile 的 `pnpm-workspace.yaml`：
+Git 安装拿到的是源码。`prepare` 会在安装后编译 `lib/`。编译用相对路径读取旁边的 `deepseek-harness` 类型，没有这份检出时 `prepare` 会失败。pnpm 10 及以上默认不跑 Git 依赖的构建脚本，第一次 `add` 可能失败。按 CLI 提示把包名写入该 profile 的 `pnpm-workspace.yaml`：
 
 ```yaml
 allowBuilds:
@@ -188,4 +172,4 @@ allowBuilds:
 - `dev.patch.yml`（里面是本机绝对路径）
 - API key、`.env`、profile 目录
 
-发布到 npm 或打 tarball 之前再构建，让 `files` 里列出的 `lib/index.js`、`lib/index.d.ts` 和 `cordis.patch.yml` 进入包内。
+发布到 npm 或打 tarball 之前再构建，让 `cordis.patch.yml` 和四个包的 `lib/` 进入包内。

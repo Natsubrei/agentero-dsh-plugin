@@ -1,0 +1,101 @@
+/* scope: .agentero-pdf */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "../../../../styles/agentero-theme.css";
+@source "./";
+
+/*
+ * PDF bottom-bar zoom slider: muted gray at rest, brand accent on hover /
+ * focus / drag so the control stays quiet until the pointer engages it.
+ */
+.pdf-zoom-slider {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 4.25rem;
+	height: 1.25rem;
+	margin: 0;
+	background: transparent;
+	cursor: default;
+	accent-color: var(--muted-foreground);
+}
+
+.pdf-zoom-slider:hover,
+.pdf-zoom-slider:focus-visible,
+.pdf-zoom-slider:active {
+	accent-color: var(--brand);
+}
+
+.pdf-zoom-slider:focus {
+	outline: none;
+}
+
+.pdf-zoom-slider:focus-visible {
+	outline: 2px solid color-mix(in oklch, var(--brand) 40%, transparent);
+	outline-offset: 2px;
+	border-radius: 999px;
+}
+
+.pdf-zoom-slider::-webkit-slider-runnable-track {
+	height: 0.2rem;
+	border-radius: 999px;
+	background: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+}
+
+.pdf-zoom-slider:hover::-webkit-slider-runnable-track,
+.pdf-zoom-slider:focus-visible::-webkit-slider-runnable-track,
+.pdf-zoom-slider:active::-webkit-slider-runnable-track {
+	background: color-mix(in oklch, var(--brand) 45%, transparent);
+}
+
+.pdf-zoom-slider::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 0.75rem;
+	height: 0.75rem;
+	margin-top: -0.275rem;
+	border-radius: 999px;
+	border: none;
+	background: var(--muted-foreground);
+	box-shadow: 0 0 0 1px color-mix(in oklch, var(--background) 70%, transparent);
+	transition:
+		background-color 120ms ease,
+		box-shadow 120ms ease;
+}
+
+.pdf-zoom-slider:hover::-webkit-slider-thumb,
+.pdf-zoom-slider:focus-visible::-webkit-slider-thumb,
+.pdf-zoom-slider:active::-webkit-slider-thumb {
+	background: var(--brand);
+	box-shadow: 0 0 0 1px color-mix(in oklch, var(--brand) 35%, transparent);
+}
+
+.pdf-zoom-slider::-moz-range-track {
+	height: 0.2rem;
+	border-radius: 999px;
+	background: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+}
+
+.pdf-zoom-slider:hover::-moz-range-track,
+.pdf-zoom-slider:focus-visible::-moz-range-track,
+.pdf-zoom-slider:active::-moz-range-track {
+	background: color-mix(in oklch, var(--brand) 45%, transparent);
+}
+
+.pdf-zoom-slider::-moz-range-thumb {
+	width: 0.75rem;
+	height: 0.75rem;
+	border: none;
+	border-radius: 999px;
+	background: var(--muted-foreground);
+	box-shadow: 0 0 0 1px color-mix(in oklch, var(--background) 70%, transparent);
+	transition:
+		background-color 120ms ease,
+		box-shadow 120ms ease;
+}
+
+.pdf-zoom-slider:hover::-moz-range-thumb,
+.pdf-zoom-slider:focus-visible::-moz-range-thumb,
+.pdf-zoom-slider:active::-moz-range-thumb {
+	background: var(--brand);
+	box-shadow: 0 0 0 1px color-mix(in oklch, var(--brand) 35%, transparent);
+}
