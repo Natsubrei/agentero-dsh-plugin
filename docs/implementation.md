@@ -128,7 +128,7 @@ corepack pnpm dsh web --profile agentero --no-open
 | ID | 事项 | 状态 |
 |---|---|---|
 | T1 | 根包改为组合包，四个 loader 包，侧栏三个空面板 | 已完成 |
-| T2 | Host `GET /agentero/api/papers`，文献表面搜索和表格 | 已完成，未在 dsh 里点过 |
+| T2 | Host `GET /agentero/api/papers`，文献表面搜索和表格 | 已完成；真实 Vault 的列表与表头搜索已在 DSH 中验证 |
 | T3 | Host 笔记文件接口，笔记表面列表、渲染、编辑保存 | 已完成，未在 dsh 里点过 |
 | T4 | Host `GET /agentero/api/pdf`，PDF 表面用 EmbedPDF / PDFium 阅读，注册 `paper` 打开器 | 代码已完成。wasm 走 `GET /agentero/api/pdfium.wasm` |
 | T5 | PDF 声明 `agentero.pdf.notes`；笔记插件填入该论文的 `NOTES.md` | 代码已完成，未在 dsh 里点过 |
@@ -137,6 +137,7 @@ corepack pnpm dsh web --profile agentero --no-open
 | T8 | Host 注册给模型用的工具（列论文、导入、读笔记、搜索笔记、发现） | 代码已完成 |
 | T9 | 把插件装进 profile，配 Vault，用真实论文走通 | 已在 `web` profile 上走通文献列表、笔记渲染、PDF 翻页和论文笔记槽。标签增删已用接口验证并复原。BibTeX 导出和 arXiv 发现因 CLI 访问外网失败返回 502。卸插件和划词加入会话还没点 |
 | T10 | 版面侧栏、区域批注、全文翻译、书签写回、导出带批注 PDF | 未做，排在 T6 之后 |
+| T11 | Library 与 Agentero 桌面视觉对齐：紧凑表格、按需表单与标签编辑、菜单、错误 Toast | 已完成；在本机 DSH 验证搜索、空结果、排序、刷新保留滚动位置、菜单切换、标签输入焦点和已有 PDF 打开；本轮未执行导入、删除、标签写入等 Vault 数据变更 |
 
 ## 已实现的行为
 
@@ -210,11 +211,19 @@ open(kind, id): boolean
 - 语言包 `agentero.library`，中文标题「文献」。
 - 挂载后面板 `fetch('/agentero/api/papers', { cache: 'no-store' })`。
 - 表格列：标题、作者、年份、标签。年份没有时用 `date`。筛选框只匹配标题和作者，在浏览器里做。
-- 行点击把 `path`（空则用 `id`）交给 `agentero.open('paper', id)`。返回 false 时在面板里显示「PDF 插件未启用」，不切走。
+- 与 Agentero 桌面库对齐：表头内搜索、单行截断、细分隔线、轻量悬停；列表单独滚动，表头 sticky，底部显示总数或筛选数。表格最小宽度 `38rem`，更窄的侧栏横向滚动。
+- 表头 `+` 按需展开 arXiv / DOI / URL 导入；更多菜单保留刷新、发现、BibTeX 导入与导出。输入草稿留在操作组件，输入不会触发所有论文行重绘。发现结果可关闭。
+- 标签默认仅展示首个 chip 与剩余数量；点击打开完整标签列表及增删控件，焦点落在输入框，Escape 关闭弹层，长名称不会撑高行。标签输入草稿继续保存在该行，写入失败时保留。
+- 行尾更多菜单在悬停、键盘焦点或触屏下可见，提供打开、补下载、删除；删除仍确认并只进回收站。单击行或在聚焦行按 Enter / Space 打开。
+- 行点击把 `path`（空则用 `id`）交给 `agentero.open('paper', id)`。返回 false 时经 `notifyError` 显示「PDF 插件未启用」，不切走。
 - 503 且 error 为 `vault is not configured` 时显示「尚未配置 Vault」。
-- 样式是面板内一段普通 CSS，类名以 `agentero-library` 开头。右栏里用 `height: 100%` 撑满页。表头字重 500。
+- 样式经 Tailwind 构建并限定在 `.agentero-library` 内，复用 Agentero 色彩与字号；控件圆角和字重在 Library 内明确设置，字重不超过 500。Radix 弹层携带相同作用域，不改 DSH 外壳或另两个界面包。
+- 操作失败与后台刷新错误经 `notifyError` 使用 DSH 原生 Toast，注册在 `shell.overlay`，关闭 Library 后仍可读到；不在表头挂常驻错误条。首屏加载失败保留就地刷新入口。
+- 后台刷新保留已挂载的表格、搜索和滚动位置；论文行继续 memo，操作回调保持稳定。
 - 组件 `LibraryPanel` 不接收 `ctx`。`loadPapers` 和 `openPaper` 在 `apply` 里注入。
 - 类型 `agentero.library`，id `agentero-dsh-library`。开始页卡片 order 40。
+
+后续仍未实现：列宽调整与显隐、自定义属性、阅读热力图、行右键菜单和虚拟滚动；本次只对齐现有 Library 的视觉与操作层级，不复制桌面库全部能力。
 
 ### 笔记表面
 

@@ -3,3 +3,37 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "../../../../styles/agentero-theme.css";
 @source "./";
+
+@theme inline {
+  --font-weight-medium: 500;
+  --font-weight-semibold: 500;
+}
+
+.agentero-library {
+  font-weight: 400;
+  --radius: 0.5rem;
+  --radius-md: 0.4rem;
+}
+
+.agentero-library *,
+.agentero-library *::before,
+.agentero-library *::after {
+  box-sizing: border-box;
+}
+
+.agentero-library [data-library-scroll] {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 25%, transparent) transparent;
+}
+
+.agentero-library table {
+  border-spacing: 0;
+}
+
+.agentero-library td {
+  vertical-align: middle;
+}
+
+.agentero-library [data-library-header] button {
+  font-weight: 500;
+}

@@ -2,8 +2,11 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { createElement, type ReactNode } from 'react'
 import { LibraryPanel } from './papers-library'
+import { LibraryFeedback, type LibraryNotice } from './library-feedback'
 import {
   bibText,
   discoverItems,
@@ -47,6 +50,13 @@ const zh = {
   removeTag: '移除标签',
   confirmDelete: '移到回收站？',
   actionFailed: '操作失败',
+  moreActions: '更多操作',
+  refresh: '刷新',
+  openPaper: '打开论文',
+  editTags: '编辑标签',
+  paperCount: '{count} 篇文献',
+  filteredCount: '{count} / {total} 篇文献',
+  clearResults: '关闭发现结果',
 }
 
 const en = {
@@ -76,6 +86,13 @@ const en = {
   removeTag: 'Remove tag',
   confirmDelete: 'Move to the recycle bin?',
   actionFailed: 'Action failed',
+  moreActions: 'More actions',
+  refresh: 'Refresh',
+  openPaper: 'Open paper',
+  editTags: 'Edit tags',
+  paperCount: '{count} papers',
+  filteredCount: '{count} of {total} papers',
+  clearResults: 'Close discovery results',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -120,7 +137,15 @@ export const inject = ['slots', 'locale', 'sidebarRightTabs']
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }))
   const t = ctx.locale.bind(NS)
+  const notice = createSnapshotStore<LibraryNotice>(null)
+  let sequence = 0
+  ctx.effect(() => () => { notice.set(null) })
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay', id: 'agentero-library.feedback',
+    inject: () => ({ hooks: { notice }, dismiss: () => { notice.set(null) } }),
+  }, LibraryFeedback))
   const face: LibraryFace = {
+    notifyError(message) { notice.set({ text: message, sequence: ++sequence }) },
     async loadPapers() {
       const response = await fetch('/agentero/api/papers', { cache: 'no-store' })
       let body: unknown
