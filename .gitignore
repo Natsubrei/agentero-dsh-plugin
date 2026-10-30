@@ -3,3 +3,4 @@ lib/
 *.tsbuildinfo
 .DS_Store
 dev.patch.yml
+.spec-workflow/
