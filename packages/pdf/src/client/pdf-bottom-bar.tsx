@@ -1,18 +1,7 @@
 import { Palette } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { PropsLocale } from "@deepseek-ai/dsh-client-ui-slots";
 import { Button } from "./button";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "./popover";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipProvider,
-	TooltipTrigger,
-} from "./tooltip";
 import { PDF_CHROME_CHIP } from "./pdf-chrome-surface";
 import { cn } from "./cn";
 import {
@@ -120,42 +109,40 @@ export const PdfBottomBar = memo(function PdfBottomBar({
 	);
 
 	const chrome = (
-		<TooltipProvider delayDuration={200}>
-			<div
-				data-pdf-chrome
-				className={cn(
-					"pointer-events-auto flex max-w-full select-none items-center gap-0.5 rounded-lg p-0.5",
-					PDF_CHROME_CHIP,
-				)}
-			>
-				{pageFieldNode}
-				<span aria-hidden className="mx-0.5 h-3.5 w-px shrink-0 bg-border" />
-				<div className="flex shrink-0 items-center gap-1.5 px-1">
-					<input
-						type="range"
-						min={zoomMinPercent}
-						max={zoomMaxPercent}
-						step={1}
-						value={zoomPercent}
-						aria-label={t("zoom")}
-						aria-valuemin={zoomMinPercent}
-						aria-valuemax={zoomMaxPercent}
-						aria-valuenow={zoomPercent}
-						aria-valuetext={`${formatPdfZoomPercentage(zoomLevel)}%`}
-						className="pdf-zoom-slider"
-						onChange={(e) => onZoomChange(Number(e.target.value) / 100)}
-					/>
-					<span
-						aria-hidden
-						className="min-w-[3.25ch] text-right text-muted-foreground text-xs tabular-nums"
-					>
-						{formatPdfZoomPercentage(zoomLevel)}%
-					</span>
-				</div>
-				<span aria-hidden className="mx-0.5 h-3.5 w-px shrink-0 bg-border" />
-				{tone}
+		<div
+			data-pdf-chrome
+			className={cn(
+				"pointer-events-auto flex max-w-full select-none items-center gap-0.5 rounded-lg p-0.5",
+				PDF_CHROME_CHIP,
+			)}
+		>
+			{pageFieldNode}
+			<span aria-hidden className="mx-0.5 h-3.5 w-px shrink-0 bg-border" />
+			<div className="flex shrink-0 items-center gap-1.5 px-1">
+				<input
+					type="range"
+					min={zoomMinPercent}
+					max={zoomMaxPercent}
+					step={1}
+					value={zoomPercent}
+					aria-label={t("zoom")}
+					aria-valuemin={zoomMinPercent}
+					aria-valuemax={zoomMaxPercent}
+					aria-valuenow={zoomPercent}
+					aria-valuetext={`${formatPdfZoomPercentage(zoomLevel)}%`}
+					className="pdf-zoom-slider"
+					onChange={(e) => onZoomChange(Number(e.target.value) / 100)}
+				/>
+				<span
+					aria-hidden
+					className="min-w-[3.25ch] text-right text-muted-foreground text-xs tabular-nums"
+				>
+					{formatPdfZoomPercentage(zoomLevel)}%
+				</span>
 			</div>
-		</TooltipProvider>
+			<span aria-hidden className="mx-0.5 h-3.5 w-px shrink-0 bg-border" />
+			{tone}
+		</div>
 	);
 
 	return (
@@ -183,66 +170,85 @@ function PdfPaperToneButton({
 	t: PdfT;
 }) {
 	const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+	const rootRef = useRef<HTMLDivElement>(null);
 	const pickerOpen = open ?? uncontrolledOpen;
 	const setPickerOpen = onOpenChange ?? setUncontrolledOpen;
 
+	useEffect(() => {
+		if (!pickerOpen) return undefined;
+		const closeOnOutside = (event: PointerEvent): void => {
+			const root = rootRef.current;
+			if (root !== null && event.target instanceof Node && !root.contains(event.target)) {
+				setPickerOpen(false);
+			}
+		};
+		const closeOnEscape = (event: KeyboardEvent): void => {
+			if (event.key === "Escape") setPickerOpen(false);
+		};
+		document.addEventListener("pointerdown", closeOnOutside);
+		document.addEventListener("keydown", closeOnEscape);
+		return () => {
+			document.removeEventListener("pointerdown", closeOnOutside);
+			document.removeEventListener("keydown", closeOnEscape);
+		};
+	}, [pickerOpen, setPickerOpen]);
+
 	return (
-		<Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<PopoverTrigger asChild>
-						<Button
-							type="button"
-							size={size}
-							variant="ghost"
-							className="shrink-0 text-muted-foreground"
-							aria-label={t("paperTone")}
-							title={t("paperTone")}
-						>
-							<Palette className="size-3.5" />
-						</Button>
-					</PopoverTrigger>
-				</TooltipTrigger>
-				<TooltipContent side={side}>{t("paperTone")}</TooltipContent>
-			</Tooltip>
-			<PopoverContent
-				side={side}
-				align="end"
-				className="w-auto flex-row items-center gap-1.5 p-1.5"
+		<div ref={rootRef} className="relative shrink-0">
+			<Button
+				type="button"
+				size={size}
+				variant="ghost"
+				className="shrink-0 text-muted-foreground"
+				aria-label={t("paperTone")}
+				aria-haspopup="dialog"
+				aria-expanded={pickerOpen}
+				title={t("paperTone")}
+				onClick={() => setPickerOpen(!pickerOpen)}
 			>
-				{PDF_PAPER_TONES.map((paperTone) => {
-					const label = t(TONE_LABEL[paperTone]);
-					return (
-						<Tooltip key={paperTone}>
-							<TooltipTrigger asChild>
-								<button
-									type="button"
-									aria-label={label}
-									aria-pressed={pdfTone === paperTone}
+				<Palette className="size-3.5" />
+			</Button>
+			{pickerOpen ? (
+				<div
+					role="dialog"
+					aria-label={t("paperTone")}
+					className={cn(
+						"absolute right-0 z-30 flex w-auto flex-row items-center gap-1.5 rounded-lg p-1.5",
+						side === "top" ? "bottom-full mb-1" : "top-full mt-1",
+						PDF_CHROME_CHIP,
+					)}
+				>
+					{PDF_PAPER_TONES.map((paperTone) => {
+						const label = t(TONE_LABEL[paperTone]);
+						return (
+							<button
+								key={paperTone}
+								type="button"
+								aria-label={label}
+								aria-pressed={pdfTone === paperTone}
+								title={label}
+								className={cn(
+									"size-5 shrink-0 rounded-full border-0 p-0 ring-1 ring-black/15 transition-transform duration-100 hover:scale-105 active:scale-95 dark:ring-white/25",
+									pdfTone === paperTone &&
+										"ring-2 ring-foreground/70 ring-offset-1 ring-offset-popover",
+								)}
+								onClick={() => {
+									onSetPdfTone(paperTone);
+									setPickerOpen(false);
+								}}
+							>
+								<span
+									aria-hidden
 									className={cn(
-										"size-5 shrink-0 rounded-full border-0 p-0 ring-1 ring-black/15 transition-transform duration-100 hover:scale-105 active:scale-95 dark:ring-white/25",
-										pdfTone === paperTone &&
-											"ring-2 ring-foreground/70 ring-offset-1 ring-offset-popover",
+										"block size-full rounded-full",
+										PDF_PAPER_SWATCH_CLASS[paperTone],
 									)}
-									onClick={() => {
-										onSetPdfTone(paperTone);
-										setPickerOpen(false);
-									}}
-								>
-									<span
-										aria-hidden
-										className={cn(
-											"block size-full rounded-full",
-											PDF_PAPER_SWATCH_CLASS[paperTone],
-										)}
-									/>
-								</button>
-							</TooltipTrigger>
-							<TooltipContent side="top">{label}</TooltipContent>
-						</Tooltip>
-					);
-				})}
-			</PopoverContent>
-		</Popover>
+								/>
+							</button>
+						);
+					})}
+				</div>
+			) : null}
+		</div>
 	);
 }
