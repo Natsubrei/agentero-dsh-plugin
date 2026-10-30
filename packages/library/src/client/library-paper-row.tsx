@@ -1,5 +1,5 @@
 import { Download, Trash2 } from 'lucide-react'
-import { Fragment, type KeyboardEvent, type MouseEvent } from 'react'
+import { Fragment, memo, type KeyboardEvent, type MouseEvent } from 'react'
 import {
   COLUMN_META,
   COLUMN_ORDER,
@@ -12,16 +12,21 @@ type LibraryPaperRowProps = {
   paper: PaperRow
   ctx: CellCtx
   busy: boolean
-  onOpen: (openId: string) => void
-  onDownload: () => void
-  onDelete: () => void
+  /** Handlers take the row's ref so the panel can keep one stable identity per action. */
+  onOpen: (ref: string) => void
+  onDownload: (ref: string) => void
+  onDelete: (ref: string) => void
 }
 
 function ignoresRowOpen(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('button, input') !== null
 }
 
-export function LibraryPaperRow({
+/**
+ * One catalog row. Memoized: the panel re-renders on every filter keystroke, and
+ * without this each one rebuilt all rows and their tag inputs.
+ */
+export const LibraryPaperRow = memo(function LibraryPaperRow({
   paper,
   ctx,
   busy,
@@ -59,7 +64,7 @@ export function LibraryPaperRow({
             aria-label={ctx.t('download')}
             title={ctx.t('download')}
             disabled={busy}
-            onClick={onDownload}
+            onClick={() => { onDownload(paper.openId) }}
           >
             <Download className='size-3.5' aria-hidden />
           </button>
@@ -71,7 +76,7 @@ export function LibraryPaperRow({
             disabled={busy}
             onClick={() => {
               if (!window.confirm(ctx.t('confirmDelete'))) return
-              onDelete()
+              onDelete(paper.openId)
             }}
           >
             <Trash2 className='size-3.5' aria-hidden />
@@ -80,4 +85,4 @@ export function LibraryPaperRow({
       </td>
     </tr>
   )
-}
+})

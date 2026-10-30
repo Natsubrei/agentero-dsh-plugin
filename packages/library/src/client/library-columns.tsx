@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { PaperTagChip, PaperTagRemoveButton } from './paper-tag-chip'
 import type { LibraryT, PaperRow } from './papers'
-import { Input } from './input'
+import { TagComposer } from './tag-composer'
 import { cn, controlReset } from './utils'
 
 export type SortDir = 'asc' | 'desc'
@@ -14,10 +14,9 @@ export type ColumnKey = (typeof COLUMN_ORDER)[number]
 export interface CellCtx {
   t: LibraryT
   busy: boolean
-  tagDraft: string
-  onTagDraft: (value: string) => void
-  onAddTag: (tag: string) => void
-  onRemoveTag: (name: string) => void
+  /** Resolves true when the tag was written, so the composer keeps its draft on failure. */
+  onAddTag: (ref: string, tag: string) => Promise<boolean>
+  onRemoveTag: (ref: string, name: string) => void
 }
 
 interface ColumnDef {
@@ -84,28 +83,15 @@ export const COLUMN_META: Record<ColumnKey, ColumnDef> = {
                   tagName={tag.name}
                   label={`${ctx.t('removeTag')} ${tag.name}`}
                   disabled={ctx.busy}
-                  onRemove={ctx.onRemoveTag}
+                  onRemove={(name) => { ctx.onRemoveTag(paper.openId, name) }}
                 />
               )}
             />
           ))}
-          <Input
-            value={ctx.tagDraft}
-            placeholder={ctx.t('addTag')}
-            aria-label={ctx.t('addTag')}
+          <TagComposer
+            label={ctx.t('addTag')}
             disabled={ctx.busy}
-            className='h-6 w-16 border-transparent bg-muted/70 px-1.5 text-xs shadow-none placeholder:text-muted-foreground/70 focus-visible:border-border/60 focus-visible:bg-card'
-            onMouseDown={(event) => { event.stopPropagation() }}
-            onClick={(event) => { event.stopPropagation() }}
-            onChange={(event) => { ctx.onTagDraft(event.target.value) }}
-            onKeyDown={(event) => {
-              event.stopPropagation()
-              if (event.key !== 'Enter') return
-              event.preventDefault()
-              const tag = ctx.tagDraft.trim()
-              if (tag === '') return
-              ctx.onAddTag(tag)
-            }}
+            onAdd={(tag) => ctx.onAddTag(paper.openId, tag)}
           />
         </div>
       </td>
