@@ -1,9 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import { createElement, type ReactNode } from 'react'
-import { RecommendPanel } from './recommend-panel'
+import { RecommendDock } from './recommend-dock'
 import {
   arxivFrom,
   errorText,
@@ -18,17 +17,13 @@ import {
   type ZhihuSearchItem,
 } from './types'
 
-/** Right-sidebar tab identity. The body registers under this key. */
-const TAB_ID = 'agentero-dsh-recommend'
-
-/** Page kind opened from the session guide. */
-const TAB_KIND = 'agentero.recommend'
+/** List entry identity inside the composer dock. */
+const DOCK_ID = 'agentero-dsh-recommend'
 
 const NS = 'agentero.recommend'
 
 const zh = {
   title: '推荐',
-  guideDescription: 'arXiv 每日推荐与知乎讨论',
   arxivTab: 'arXiv 每日',
   zhihuTab: '知乎',
   refresh: '重新计算推荐',
@@ -37,9 +32,10 @@ const zh = {
   addCategory: '添加分类',
   categoryPlaceholder: '例如 cs.RO',
   removeCategory: '移除分类 {category}',
-  loading: '加载中…',
+  categories: 'arXiv 分类',
+  expand: '展开推荐',
+  collapse: '收起推荐',
   settings: '设置',
-  settingsTitle: '推荐设置',
   settingsDescription: '留空表示继续使用 Agentero 桌面端已经保存的配置。',
   baseUrl: 'Embedding Base URL',
   apiKey: 'Embedding API Key',
@@ -54,12 +50,11 @@ const zh = {
   secretMissing: '未配置',
   keepBlank: '留空保持不变',
   close: '关闭',
-  idle: '还没有今日推荐。点击刷新，把当天 arXiv 新论文与论文库排序。',
+  idle: '还没有今日推荐。点刷新，把当天 arXiv 新论文与论文库排序。',
   needsEmbedding: '请先配置 Embedding 模型——推荐需要把新论文摘要与你的论文库比对。',
   probeFailed: 'Embedding 服务没有响应。请检查地址、密钥和模型后重试。',
   needsCorpus: '论文库里还没有带摘要的论文，暂时无法排序。',
   noCandidates: '今天的 arXiv 源没有取到可用论文，稍后再试。',
-  noRecommendations: '今天没有推荐结果。',
   retry: '重试',
   openSettings: '打开设置',
   updatedAt: '更新于 {time}',
@@ -70,8 +65,6 @@ const zh = {
   open: '打开',
   actionFailed: '操作失败',
   vaultMissing: '尚未配置 Vault',
-  invalid: '无法读取推荐结果',
-  loadFailed: '无法加载推荐',
   zhihuSearchPlaceholder: '论文标题或关键词',
   zhihuSearch: '检索',
   zhihuNote: '按关键词检索知乎，结果可能与当前论文无关。',
@@ -88,7 +81,6 @@ const zh = {
 
 const en = {
   title: 'Recommend',
-  guideDescription: 'arXiv daily papers and Zhihu discussions',
   arxivTab: 'arXiv daily',
   zhihuTab: 'Zhihu',
   refresh: 'Recompute recommendations',
@@ -97,9 +89,10 @@ const en = {
   addCategory: 'Add category',
   categoryPlaceholder: 'e.g. cs.RO',
   removeCategory: 'Remove {category}',
-  loading: 'Loading…',
+  categories: 'arXiv categories',
+  expand: 'Expand recommendations',
+  collapse: 'Collapse recommendations',
   settings: 'Settings',
-  settingsTitle: 'Recommendation settings',
   settingsDescription: 'Leave a field blank to keep using the value saved in the Agentero desktop app.',
   baseUrl: 'Embedding base URL',
   apiKey: 'Embedding API key',
@@ -119,7 +112,6 @@ const en = {
   probeFailed: 'The embedding service did not respond. Check the URL, key, and model, then retry.',
   needsCorpus: 'The library has no papers with abstracts to compare against yet.',
   noCandidates: 'The arXiv feeds returned no usable papers today. Try again later.',
-  noRecommendations: 'No recommendations for today.',
   retry: 'Retry',
   openSettings: 'Open settings',
   updatedAt: 'Updated {time}',
@@ -130,8 +122,6 @@ const en = {
   open: 'Open',
   actionFailed: 'Action failed',
   vaultMissing: 'Vault is not configured',
-  invalid: 'Could not read the recommendation response',
-  loadFailed: 'Could not load recommendations',
   zhihuSearchPlaceholder: 'Paper title or keyword',
   zhihuSearch: 'Search',
   zhihuNote: 'Search is keyword-based; results may not discuss the current paper.',
@@ -148,27 +138,10 @@ const en = {
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Recommendation panel copy. */
+    /** Recommendation dock copy. */
     'agentero.recommend': keyof typeof zh
   }
-}
 
-function RecommendArtwork({ size = 36, className }: { size?: number | undefined, className?: string | undefined }): ReactNode {
-  return createElement('svg', {
-    width: size,
-    height: size,
-    className,
-    viewBox: '0 0 36 36',
-    fill: 'none',
-    'aria-hidden': true,
-  },
-  createElement('path', {
-    d: 'M18 6l2.4 7.1L28 15.5l-7.6 2.4L18 25l-2.4-7.1L8 15.5l7.6-2.4L18 6z',
-    stroke: '#C792EA',
-    strokeWidth: 1.8,
-    strokeLinejoin: 'round',
-  }),
-  createElement('path', { d: 'M27 24l1 2.9 2.9 1-2.9 1L27 32l-1-3.1-2.9-1 2.9-1L27 24z', fill: '#C792EA' }))
 }
 
 async function request(path: string, init?: RequestInit): Promise<unknown> {
@@ -187,17 +160,16 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
 /** Browser plugin name. */
 export const name = 'agentero-recommend'
 
-/** Slot, locale, and sidebar services. */
-export const inject = ['slots', 'locale', 'sidebarRightTabs']
+/** Slot and locale services. The dock renders inside the composer stack. */
+export const inject = ['slots', 'locale']
 
 /**
- * Register recommendation pages in the session right sidebar.
- * arXiv daily and Zhihu share one tab with a segmented switch.
+ * Dock the recommendation strip under the conversation composer.
+ * arXiv daily and Zhihu share one surface so neither takes a sidebar page.
  * @param ctx - Browser plugin context.
  */
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }))
-  const t = ctx.locale.bind(NS)
   const face: RecommendFace = {
     async loadSettings(): Promise<SettingsView> {
       return settingsFrom(await request('/settings'))
@@ -244,22 +216,11 @@ export function apply(ctx: Context): void {
       if (!response.ok) throw new Error(errorText(body) ?? '')
     },
   }
-  ctx.effect(() => ctx.sidebarRightTabs.register({
-    id: TAB_ID,
-    kind: TAB_KIND,
-    title: () => t('title'),
-    guide: [{
-      id: 'recommend',
-      order: 60,
-      title: () => t('title'),
-      description: () => t('guideDescription'),
-      icon: RecommendArtwork,
-    }],
-  }))
-  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
-    name: 'sidebar.right.pane.tab',
-    key: TAB_ID,
+  ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
+    name: 'conversation.input.dock',
+    id: DOCK_ID,
+    order: 60,
     locale: NS,
     inject: () => face,
-  }, RecommendPanel)))
+  }, RecommendDock)))
 }

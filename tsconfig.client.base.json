@@ -24,6 +24,7 @@
       "@deepseek-ai/dsh-client-ui-sidebar/client": ["../deepseek-harness/packages/client/ui-sidebar/lib/types/client/index.d.ts"],
       "@deepseek-ai/dsh-client-ui-renderer/client": ["../deepseek-harness/packages/client/ui-renderer/lib/types/client/index.d.ts"],
       "@deepseek-ai/dsh-client-ui-session/client": ["../deepseek-harness/packages/client/ui-session/lib/types/client/index.d.ts"],
+      "@deepseek-ai/dsh-client-ui-conversation/client": ["../deepseek-harness/packages/client/ui-conversation/lib/types/client/index.d.ts"],
       "@deepseek-ai/dsh-client-ui-sidebar-right/client": ["../deepseek-harness/packages/client/ui-sidebar-right/lib/types/client/index.d.ts"],
       "react": ["./node_modules/@types/react/index.d.ts"]
     }
