@@ -13,6 +13,7 @@ import {
   errorText,
   postJson,
   type LibraryFace,
+  type VaultInfo,
 } from './papers'
 
 /** Right-sidebar tab identity. The body registers under this key. */
@@ -57,6 +58,13 @@ const zh = {
   paperCount: '{count} 篇文献',
   filteredCount: '{count} / {total} 篇文献',
   clearResults: '关闭发现结果',
+  selectVault: '选择知识库',
+  vaultPath: '知识库目录',
+  chooseDirectory: '选择文件夹…',
+  openVault: '打开',
+  invalidVault: '请选择已有的 Agentero 知识库根目录。',
+  pickerUnavailable: '目录选择器不可用，请输入知识库路径。',
+  switchVaultConfirm: '切换知识库会重新加载当前页面，请先保存笔记。是否继续？',
 }
 
 const en = {
@@ -93,6 +101,13 @@ const en = {
   paperCount: '{count} papers',
   filteredCount: '{count} of {total} papers',
   clearResults: 'Close discovery results',
+  selectVault: 'Select knowledge base',
+  vaultPath: 'Knowledge base directory',
+  chooseDirectory: 'Choose folder…',
+  openVault: 'Open',
+  invalidVault: 'Choose the root directory of an existing Agentero knowledge base.',
+  pickerUnavailable: 'The directory picker is unavailable. Enter the knowledge base path instead.',
+  switchVaultConfirm: 'Switching knowledge bases reloads this page. Save your notes first. Continue?',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -105,6 +120,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** Document opener the host client service provides, when that plugin is loaded. */
 interface AgenteroLike {
   open(kind: 'paper' | 'note', id: string): boolean
+  getVault(): Promise<VaultInfo>
+  request(url: string, init?: RequestInit): Promise<Response>
 }
 
 function LibraryArtwork({ size = 36, className }: { size?: number | undefined, className?: string | undefined }): ReactNode {
@@ -137,6 +154,14 @@ export const inject = ['slots', 'locale', 'sidebarRightTabs']
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }))
   const t = ctx.locale.bind(NS)
+  let source: AgenteroLike | undefined
+  const agentero = (): AgenteroLike => {
+    const service = source ??= ctx.get('agentero') as AgenteroLike | undefined
+    if (service === undefined) throw new Error(t('vaultMissing'))
+    return service
+  }
+  const request = (url: string, init?: RequestInit): Promise<Response> => agentero().request(url, init)
+  const post = (url: string, body: unknown): Promise<unknown> => postJson(url, body, request)
   const notice = createSnapshotStore<LibraryNotice>(null)
   let sequence = 0
   ctx.effect(() => () => { notice.set(null) })
@@ -146,8 +171,23 @@ export function apply(ctx: Context): void {
   }, LibraryFeedback))
   const face: LibraryFace = {
     notifyError(message) { notice.set({ text: message, sequence: ++sequence }) },
+    loadVault() { return agentero().getVault() },
+    async pickVault() {
+      const body = await post('/agentero/api/vault/pick', {}) as { path: string | null }
+      return body.path
+    },
+    async selectVault(path) {
+      const response = await request('/agentero/api/vault', {
+        method: 'PUT', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+      const body: unknown = await response.json()
+      if (!response.ok) throw new Error(errorText(body) ?? '')
+      // Clear every panel, PDF buffer and unsaved editor source together.
+      window.location.reload()
+    },
     async loadPapers() {
-      const response = await fetch('/agentero/api/papers', { cache: 'no-store' })
+      const response = await request('/agentero/api/papers', { cache: 'no-store' })
       let body: unknown
       try {
         body = await response.json()
@@ -163,31 +203,31 @@ export function apply(ctx: Context): void {
       return agentero.open('paper', id)
     },
     async importId(text) {
-      await postJson('/agentero/api/import', { text })
+      await post('/agentero/api/import', { text })
     },
     async importBib(text) {
-      await postJson('/agentero/api/import/bib', { text })
+      await post('/agentero/api/import/bib', { text })
     },
     async exportBib() {
-      const response = await fetch('/agentero/api/export/bib', { cache: 'no-store' })
+      const response = await request('/agentero/api/export/bib', { cache: 'no-store' })
       const body: unknown = await response.json()
       if (!response.ok) throw new Error(errorText(body) ?? '')
       return bibText(body)
     },
     async discover(keyword) {
-      return discoverItems(await postJson('/agentero/api/discover', { keyword }))
+      return discoverItems(await post('/agentero/api/discover', { keyword }))
     },
     async addTag(ref, tag) {
-      await postJson('/agentero/api/papers/tags', { ref, op: 'add', tag })
+      await post('/agentero/api/papers/tags', { ref, op: 'add', tag })
     },
     async removeTag(ref, tag) {
-      await postJson('/agentero/api/papers/tags', { ref, op: 'rm', tag })
+      await post('/agentero/api/papers/tags', { ref, op: 'rm', tag })
     },
     async deletePaper(ref) {
-      await postJson('/agentero/api/papers/delete', { ref })
+      await post('/agentero/api/papers/delete', { ref })
     },
     async download(ref) {
-      await postJson('/agentero/api/papers/download', { ref })
+      await post('/agentero/api/papers/download', { ref })
     },
   }
   ctx.effect(() => ctx.sidebarRightTabs.register({

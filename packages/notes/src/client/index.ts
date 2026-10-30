@@ -172,23 +172,29 @@ export const inject = ['slots', 'locale', 'sidebarRightTabs']
  * @param ctx - Browser plugin context.
  */
 export function apply(ctx: Context): void {
+  let source: { request(url: string, init?: RequestInit): Promise<Response> } | undefined
+  const request = (url: string, init?: RequestInit): Promise<Response> => {
+    const agentero = source ??= ctx.get('agentero') as typeof source
+    if (agentero === undefined) return Promise.reject(new Error('vault is not configured'))
+    return agentero.request(url, init)
+  }
   ctx.effect(() => ctx.locale.register(NS, { zh, en }))
   const t = ctx.locale.bind(NS)
   const face: NotesFace = {
     async loadNotes() {
-      const response = await fetch('/agentero/api/notes', { cache: 'no-store' })
+      const response = await request('/agentero/api/notes', { cache: 'no-store' })
       const body = await parseBody(response)
       if (!response.ok) throw new Error(errorText(body) ?? '')
       return notesFrom(body)
     },
     async readNote(notePath) {
-      const response = await fetch(fileUrl(notePath), { cache: 'no-store' })
+      const response = await request(fileUrl(notePath), { cache: 'no-store' })
       const body = await parseBody(response)
       if (!response.ok) throw new Error(errorText(body) ?? '')
       return noteFileFrom(body)
     },
     async writeNote(notePath, text) {
-      const response = await fetch(fileUrl(notePath), {
+      const response = await request(fileUrl(notePath), {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ text }),

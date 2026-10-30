@@ -24,7 +24,7 @@ export interface PaintMark {
   note: string
   /** Highlight palette key, when the store carries one. */
   color?: HighlightColor
-  /** Vault-relative PNG for a visual region mark. */
+  /** Host image URL tied to the source knowledge base. */
   asset?: string
 }
 

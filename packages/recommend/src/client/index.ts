@@ -144,8 +144,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 }
 
-async function request(path: string, init?: RequestInit): Promise<unknown> {
-  const response = await fetch(`/agentero/api/recommend${path}`, { cache: 'no-store', ...init })
+type VaultRequest = (url: string, init?: RequestInit) => Promise<Response>
+
+async function readResponse(transport: VaultRequest, path: string, init?: RequestInit): Promise<unknown> {
+  const response = await transport(`/agentero/api/recommend${path}`, { cache: 'no-store', ...init })
   const text = await response.text()
   let body: unknown
   try {
@@ -170,6 +172,14 @@ export const inject = ['slots', 'locale']
  */
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }))
+  const t = ctx.locale.bind(NS)
+  let source: { request: VaultRequest } | undefined
+  const transport: VaultRequest = (url, init) => {
+    const agentero = source ??= ctx.get('agentero') as typeof source
+    if (agentero === undefined) return Promise.reject(new Error(t('vaultMissing')))
+    return agentero.request(url, init)
+  }
+  const request = (path: string, init?: RequestInit): Promise<unknown> => readResponse(transport, path, init)
   const face: RecommendFace = {
     async loadSettings(): Promise<SettingsView> {
       return settingsFrom(await request('/settings'))
@@ -206,7 +216,7 @@ export function apply(ctx: Context): void {
       return zhihuFrom(await request(`/zhihu?${params.toString()}`))
     },
     async importPaper(text: string): Promise<void> {
-      const response = await fetch('/agentero/api/import', {
+      const response = await transport('/agentero/api/import', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ text }),

@@ -69,7 +69,7 @@ corepack pnpm dsh web --dump-config
 
 `--dump-config` 里应能看到 `# == agentero-dsh-plugin`，以及 `agentero-host`、`agentero-library`、`agentero-notes`、`agentero-pdf`、`agentero-recommend` 五行。
 
-Vault 和 CLI 路径写在本机 profile，不写进会提交的 `cordis.patch.yml`。编辑 `~/.dsh/profiles/web/cordis.patch.yml`（设置了 `DSH_HOME` 时是 `$DSH_HOME/profiles/web/cordis.patch.yml`）。后一层会整段替换目标行的 `config`，不会按键合并，所以两个字段写在一起：
+Vault 可以在文献面板顶部的「选择知识库」中指定：选择已有知识库根目录并打开，DSH 会保存到当前 profile，并记住最近的目录。切换前先保存笔记，切换后页面会重新载入。CLI 路径仍可在本机 profile 配置；也可手动配置 Vault。不要把本机路径写进会提交的 `cordis.patch.yml`。编辑 `~/.dsh/profiles/web/cordis.patch.yml`（设置了 `DSH_HOME` 时是 `$DSH_HOME/profiles/web/cordis.patch.yml`）。后一层会整段替换目标行的 `config`，不会按键合并，所以两个字段写在一起：
 
 ```yaml
 - id: agentero-host

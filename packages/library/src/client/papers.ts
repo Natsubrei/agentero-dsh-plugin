@@ -2,8 +2,19 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 
 export type LibraryT = PropsLocale<'agentero.library'>['t']
 
+export interface VaultInfo {
+  path: string
+  name: string
+  scope: string
+  recentVaults: { path: string, name: string }[]
+  canPick: boolean
+}
+
 export interface LibraryFace {
   notifyError(message: string): void
+  loadVault(): Promise<VaultInfo>
+  pickVault(): Promise<string | null>
+  selectVault(path: string): Promise<void>
   loadPapers(): Promise<unknown>
   openPaper(id: string): boolean
   importId(text: string): Promise<void>
@@ -138,13 +149,15 @@ export function papersFrom(body: unknown): PaperRow[] {
 
 export function shown(message: string, t: LibraryT): string {
   if (message === 'vault is not configured') return t('vaultMissing')
+  if (message === 'invalid vault') return t('invalidVault')
+  if (message === 'directory picker unavailable') return t('pickerUnavailable')
   if (message === 'invalid papers response') return t('invalid')
   if (message === '') return t('actionFailed')
   return message
 }
 
-export async function postJson(url: string, body: unknown): Promise<unknown> {
-  const response = await fetch(url, {
+export async function postJson(url: string, body: unknown, request: (url: string, init?: RequestInit) => Promise<Response> = fetch): Promise<unknown> {
+  const response = await request(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),

@@ -5,6 +5,7 @@
     "rootDir": "src",
     "paths": {
       "@deepseek-ai/cordis": ["../../../deepseek-harness/vendor/cordis/lib/types/index.d.ts"],
+      "@deepseek-ai/schemastery": ["../../../deepseek-harness/vendor/schemastery/lib/types/index.d.ts"],
       "@deepseek-ai/dsh-host-webserver": ["../../../deepseek-harness/packages/host/webserver/lib/types/index.d.ts"]
     }
   },

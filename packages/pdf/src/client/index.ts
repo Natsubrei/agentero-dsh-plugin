@@ -20,6 +20,8 @@ declare module '@deepseek-ai/cordis' {
     /** Opener registry from the host browser plugin. */
     agentero: {
       registerOpener(kind: 'paper' | 'note', opener: (id: string) => void): () => void
+      request(url: string, init?: RequestInit): Promise<Response>
+      getVault(): Promise<{ scope: string }>
     }
   }
 }
@@ -72,7 +74,7 @@ function markRect(value: unknown): { x: number, y: number, w: number, h: number 
 }
 
 /** One mark as the host reads it off disk (`/agentero/api/marks`). */
-function markFromWire(value: unknown): PaintMark | undefined {
+function markFromWire(value: unknown, scope: string): PaintMark | undefined {
   const record = recordOf(value)
   if (record === undefined) return undefined
   const id = typeof record.id === 'string' ? record.id : ''
@@ -85,7 +87,9 @@ function markFromWire(value: unknown): PaintMark | undefined {
     .filter((rect): rect is { x: number, y: number, w: number, h: number } => rect !== undefined)
   const note = typeof record.note === 'string' ? record.note : ''
   const space = record.space === 'pt' ? 'pt' : 'norm'
-  const asset = typeof record.asset === 'string' && record.asset !== '' ? record.asset : undefined
+  const asset = typeof record.asset === 'string' && record.asset !== ''
+    ? `/agentero/api/marks/asset?${new URLSearchParams({ path: record.asset, scope }).toString()}`
+    : undefined
   const color = kind === 'highlight' && typeof record.color === 'string'
     ? normalizeHighlightColor(record.color)
     : undefined
@@ -115,6 +119,8 @@ export const inject = ['slots', 'locale', 'agentero', 'sidebarRight', 'sidebarRi
  * @param ctx - Browser plugin context.
  */
 export function apply(ctx: Context): void {
+  const source = ctx.agentero
+  const request = source.request.bind(source)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }))
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.sidebarRightTabs.register({
@@ -129,7 +135,7 @@ export function apply(ctx: Context): void {
 
   const face: PdfInjected = {
     async loadPdf(ref) {
-      const response = await fetch(`/agentero/api/pdf?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
+      const response = await request(`/agentero/api/pdf?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
       if (!response.ok) {
         const body = await parseBody(response)
         throw new Error(errorText(body) ?? '')
@@ -137,17 +143,18 @@ export function apply(ctx: Context): void {
       return response.arrayBuffer()
     },
     async loadMarks(ref) {
-      const response = await fetch(`/agentero/api/marks?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
+      const response = await request(`/agentero/api/marks?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
       const body = await parseBody(response)
       if (!response.ok) throw new Error(errorText(body) ?? '')
       const data = envelopeData(body)
       const items = Array.isArray(data?.marks) ? data.marks : []
+      const { scope } = await source.getVault()
       return items
-        .map(markFromWire)
+        .map((item) => markFromWire(item, scope))
         .filter((mark): mark is PaintMark => mark !== undefined)
     },
     async addMark(body) {
-      const response = await fetch('/agentero/api/marks', {
+      const response = await request('/agentero/api/marks', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -158,7 +165,7 @@ export function apply(ctx: Context): void {
       return translationOf(parsed)
     },
     async cite(sessionId, text) {
-      const response = await fetch('/agentero/api/context', {
+      const response = await request('/agentero/api/context', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ sessionId, text }),
@@ -168,7 +175,7 @@ export function apply(ctx: Context): void {
       if (!response.ok) throw new Error(errorText(parsed) ?? '')
     },
     async saveBookmarks(ref, nodes) {
-      const response = await fetch('/agentero/api/pdf/bookmarks', {
+      const response = await request('/agentero/api/pdf/bookmarks', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ ref, nodes }),
@@ -178,7 +185,7 @@ export function apply(ctx: Context): void {
       if (!response.ok) throw new Error(errorText(parsed) ?? '')
     },
     async translate(text) {
-      const response = await fetch('/agentero/api/translate', {
+      const response = await request('/agentero/api/translate', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ text, to: 'zh-CN' }),

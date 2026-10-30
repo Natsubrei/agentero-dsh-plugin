@@ -7,7 +7,8 @@ import { LibraryActions } from './library-actions'
 import { controlButtonClass, sortValue, type CellCtx, type ColumnKey, type SortDir } from './library-columns'
 import { LibraryPaperRow } from './library-paper-row'
 import { LibraryTableHeader } from './library-table-header'
-import { papersFrom, shown, type LibraryFace, type PaperRow } from './papers'
+import { papersFrom, shown, type LibraryFace, type PaperRow, type VaultInfo } from './papers'
+import { VaultSelector } from './vault-selector'
 
 type LibraryPanelProps =
   PropsRuntime<'sidebar.right.pane.tab'> &
@@ -41,7 +42,11 @@ export function LibraryPanel({
   deletePaper,
   download,
   notifyError,
+  loadVault,
+  pickVault,
+  selectVault,
 }: LibraryPanelProps): ReactNode {
+  const [vault, setVault] = useState<VaultInfo | null>(null)
   // Keep the mounted table and its scroll position during background reloads.
   const [papers, setPapers] = useState<PaperRow[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -55,6 +60,23 @@ export function LibraryPanel({
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   useEffect(() => {
+    let cancelled = false
+    loadVault().then((value) => { if (!cancelled) setVault(value) })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        notifyError(shown(error instanceof Error ? error.message : '', t))
+        setVault({ path: '', name: '', scope: '', recentVaults: [], canPick: false })
+      })
+    return () => { cancelled = true }
+  }, [loadVault, notifyError, t])
+
+  useEffect(() => {
+    if (vault === null) return
+    if (vault.path === '') {
+      setLoaded(true)
+      setLoading(false)
+      return
+    }
     let cancelled = false
     setLoading(true)
     loadPapers()
@@ -73,7 +95,7 @@ export function LibraryPanel({
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [loadPapers, notifyError, revision, t])
+  }, [loadPapers, notifyError, revision, t, vault])
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -161,6 +183,7 @@ export function LibraryPanel({
 
   return (
     <div className='agentero-library agentero-surface flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background text-foreground'>
+      <VaultSelector t={t} vault={vault} busy={busy} onPick={pickVault} onSelect={(path) => run(() => selectVault(path))} notifyError={notifyError} />
       {found.length === 0 ? null : (
         <div className='flex shrink-0 items-start gap-2 border-b border-border/40 px-3 py-2'>
           <div className='flex min-w-0 flex-1 flex-col gap-1'>
@@ -193,7 +216,7 @@ export function LibraryPanel({
         </table>
         {filtered.length !== 0 ? null : (
           <div className='sticky left-0 flex min-h-48 flex-col items-center justify-center gap-2 px-6 py-12 text-center text-sm text-muted-foreground' role='status'>
-            <span>{!loaded ? t('loading') : loadError !== '' ? loadError : papers.length === 0 ? t('empty') : t('noMatches')}</span>
+            <span>{!loaded ? t('loading') : vault?.path === '' ? t('vaultMissing') : loadError !== '' ? loadError : papers.length === 0 ? t('empty') : t('noMatches')}</span>
             {loadError === '' ? null : <Button variant='ghost' size='sm' disabled={loading} onClick={reload}>{t('refresh')}</Button>}
           </div>
         )}

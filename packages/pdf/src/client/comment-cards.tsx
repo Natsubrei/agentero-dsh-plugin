@@ -71,11 +71,6 @@ function swatchForKind(kind: string): HighlightColor {
 	return "yellow";
 }
 
-/** Vault-relative crop path → the host's image route. */
-function assetUrl(path: string): string {
-	return `/agentero/api/marks/asset?path=${encodeURIComponent(path)}`;
-}
-
 /**
  * One static card per current-page mark that has a note or a crop, pinned to
  * the page's right edge. Chrome only: the in-place editor, crop tool, and
@@ -140,7 +135,7 @@ export function CommentCards({ marks, pageHeight, pageSize, t }: CommentCardsPro
 							/>
 							{card.asset === undefined ? null : (
 								<img
-									src={assetUrl(card.asset)}
+									src={card.asset}
 									alt=""
 									loading="lazy"
 									className="mt-1 max-h-20 w-full rounded border border-border/50 object-cover object-top"
