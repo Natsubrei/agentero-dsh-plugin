@@ -85,6 +85,8 @@ interface EmbedReaderProps {
   pdfTone: PdfPaperTone
   onSetPdfTone: (tone: PdfPaperTone) => void
   onSelect: (hit: SelectionHit) => void
+  /** The live text selection went away; the floating menu must hide. */
+  onDeselect: () => void
   /** Persist the outline back into the PDF; resolves after the host wrote it. */
   saveBookmarks: (nodes: EditableBookmark[]) => Promise<void>
   /** Persist a cropped region as a visual mark. */
@@ -185,7 +187,7 @@ export function EmbedReader(props: EmbedReaderProps): ReactNode {
 type ReaderChromeProps = EmbedReaderProps & { engine: PdfEngine }
 
 function ReaderChrome(props: ReaderChromeProps): ReactNode {
-  const { docId, marks, pdfTone, onSetPdfTone, onSelect, saveBookmarks, saveVisual, translate, menu, engine, t } = props
+  const { docId, marks, pdfTone, onSetPdfTone, onSelect, onDeselect, saveBookmarks, saveVisual, translate, menu, engine, t } = props
   const hostRef = useRef<HTMLDivElement>(null)
   const pageFocusedRef = useRef(false)
   const [pageField, setPageField] = useState('1')
@@ -273,6 +275,14 @@ function ReaderChrome(props: ReaderChromeProps): ReactNode {
       }).catch(() => undefined)
     })
   }, [selection, docId, onSelect])
+
+  useEffect(() => {
+    if (selection === null) return undefined
+    const scope = selection.forDocument(docId)
+    return scope.onSelectionChange((range) => {
+      if (range === null) onDeselect()
+    })
+  }, [selection, docId, onDeselect])
 
   const commitPageField = (): void => {
     const parsed = Number.parseInt(pageField, 10)

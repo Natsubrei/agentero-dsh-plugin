@@ -139,6 +139,11 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     })
   }, [])
 
+  const onDeselect = useCallback(() => {
+    setMenu(undefined)
+    setDraft('')
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     setBytes(undefined)
@@ -330,6 +335,7 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
               pdfTone={pdfTone}
               onSetPdfTone={setPdfTone}
               onSelect={onSelect}
+              onDeselect={onDeselect}
               saveBookmarks={(nodes) => saveBookmarks(paperPath, nodes)}
               saveVisual={saveVisual}
               translate={translate}
