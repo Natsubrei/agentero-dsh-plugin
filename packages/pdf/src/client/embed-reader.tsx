@@ -65,9 +65,6 @@ interface EmbedReaderProps {
   onSetPdfTone: (tone: PdfPaperTone) => void
   onSelect: (hit: SelectionHit) => void
   menu: ReactNode
-  notesOpen: boolean
-  notesAvailable: boolean
-  onToggleNotes: () => void
   t: PdfT
 }
 
@@ -149,7 +146,7 @@ export function EmbedReader(props: EmbedReaderProps): ReactNode {
 }
 
 function ReaderChrome(props: EmbedReaderProps): ReactNode {
-  const { docId, marks, pdfTone, onSetPdfTone, onSelect, menu, notesOpen, notesAvailable, onToggleNotes, t } = props
+  const { docId, marks, pdfTone, onSetPdfTone, onSelect, menu, t } = props
   const hostRef = useRef<HTMLDivElement>(null)
   const pageFocusedRef = useRef(false)
   const [pageField, setPageField] = useState('1')
@@ -236,9 +233,6 @@ function ReaderChrome(props: EmbedReaderProps): ReactNode {
         onSetPdfTone={onSetPdfTone}
         zoomLevel={zoomLevel}
         onZoomChange={(level) => { zoom.provides?.requestZoom(level) }}
-        notesOpen={notesOpen}
-        notesAvailable={notesAvailable}
-        onToggleNotes={onToggleNotes}
         t={t}
       />
     </div>

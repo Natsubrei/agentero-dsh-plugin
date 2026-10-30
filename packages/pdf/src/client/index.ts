@@ -30,17 +30,6 @@ declare module '@deepseek-ai/dsh-client-ui-sidebar-right/client' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface SlotMap {
-    /** Notes column this panel declares and renders. */
-    'agentero.pdf.notes': {
-      kind: 'single'
-      scope: 'session'
-      owner: { paperPath: string }
-    }
-  }
-}
-
 function errorText(body: unknown): string | undefined {
   if (body === null || typeof body !== 'object' || !('error' in body)) return undefined
   const error = body.error
@@ -251,9 +240,6 @@ export function apply(ctx: Context): void {
     name: 'sidebar.right.pane.tab',
     key: TAB_ID,
     locale: NS,
-    children: {
-      'agentero.pdf.notes': { kind: 'single', scope: 'session' },
-    },
     inject: () => face,
   }, PdfPanel)))
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({

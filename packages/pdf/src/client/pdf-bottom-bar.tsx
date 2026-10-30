@@ -1,4 +1,4 @@
-import { NotebookPen, Palette } from "lucide-react";
+import { Palette } from "lucide-react";
 import { memo, useState } from "react";
 import type { PropsLocale } from "@deepseek-ai/dsh-client-ui-slots";
 import { Button } from "./button";
@@ -48,11 +48,6 @@ type PdfBottomBarProps = {
 	zoomLevel: number;
 	/** Apply a zoom scale from the slider. */
 	onZoomChange: (zoom: number) => void;
-	/** Whether the paper notes column is shown. */
-	notesOpen: boolean;
-	/** True when the notes plugin is loaded and rendered a slot. */
-	notesAvailable: boolean;
-	onToggleNotes: () => void;
 	t: PdfT;
 };
 
@@ -67,9 +62,6 @@ export const PdfBottomBar = memo(function PdfBottomBar({
 	onSetPdfTone,
 	zoomLevel,
 	onZoomChange,
-	notesOpen,
-	notesAvailable,
-	onToggleNotes,
 	t,
 }: PdfBottomBarProps) {
 	const [tonePickerOpen, setTonePickerOpen] = useState(false);
@@ -127,30 +119,6 @@ export const PdfBottomBar = memo(function PdfBottomBar({
 		/>
 	);
 
-	const notesButton = notesAvailable ? (
-		<Tooltip>
-			<TooltipTrigger asChild>
-				<Button
-					type="button"
-					size="icon-xs"
-					variant="ghost"
-					className={cn(
-						"shrink-0 text-muted-foreground",
-						notesOpen && "bg-muted text-foreground",
-					)}
-					aria-label={notesOpen ? t("hideNotes") : t("showNotes")}
-					aria-pressed={notesOpen}
-					onClick={onToggleNotes}
-				>
-					<NotebookPen className="size-3.5" />
-				</Button>
-			</TooltipTrigger>
-			<TooltipContent side="top">
-				{notesOpen ? t("hideNotes") : t("showNotes")}
-			</TooltipContent>
-		</Tooltip>
-	) : null;
-
 	const chrome = (
 		<TooltipProvider delayDuration={200}>
 			<div
@@ -185,10 +153,6 @@ export const PdfBottomBar = memo(function PdfBottomBar({
 					</span>
 				</div>
 				<span aria-hidden className="mx-0.5 h-3.5 w-px shrink-0 bg-border" />
-				{notesButton}
-				{notesAvailable ? (
-					<span aria-hidden className="mx-0.5 h-3.5 w-px shrink-0 bg-border" />
-				) : null}
 				{tone}
 			</div>
 		</TooltipProvider>

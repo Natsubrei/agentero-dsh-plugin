@@ -38,8 +38,6 @@ export const zh = {
   colorBlue: '蓝色',
   colorPink: '粉色',
   colorPurple: '紫色',
-  showNotes: '显示论文笔记',
-  hideNotes: '隐藏论文笔记',
 }
 
 /** PDF panel copy, English. */
@@ -80,8 +78,6 @@ export const en: { [K in keyof typeof zh]: string } = {
   colorBlue: 'Blue',
   colorPink: 'Pink',
   colorPurple: 'Purple',
-  showNotes: 'Show paper notes',
-  hideNotes: 'Hide paper notes',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {

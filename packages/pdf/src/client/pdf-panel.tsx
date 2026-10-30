@@ -1,4 +1,4 @@
-import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { cn } from './cn'
 import { EmbedReader, type SelectionHit } from './embed-reader'
@@ -40,7 +40,6 @@ export interface PdfInjected {
 
 type PdfPanelProps =
   & PropsRuntime<'sidebar.right.pane.tab'>
-  & PropsRenderSlots<'agentero.pdf.notes'>
   & InjectFace<PdfInjected>
   & PropsLocale<'agentero.pdf'>
 
@@ -83,7 +82,7 @@ export function PdfTitle({ useTabInfo, t }: PropsRuntime<'sidebar.right.pane.tab
 }
 
 export function PdfPanel(props: PdfPanelProps): ReactNode {
-  const { t, renderSlot, sessionId, useTabInfo, loadPdf, loadMarks, addMark, cite } = props
+  const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, cite } = props
   const paperPath = paperRef(useTabInfo().tab.navigation.params)
   const [status, setStatus] = useState<'empty' | 'loading' | 'missing' | 'error' | 'ready'>('empty')
   const [message, setMessage] = useState('')
@@ -94,7 +93,6 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
   const [banner, setBanner] = useState('')
   const [busy, setBusy] = useState(false)
   const [pdfTone, setPdfTone] = useState<PdfPaperTone>('white')
-  const [notesOpen, setNotesOpen] = useState(false)
 
   const onSelect = useCallback((hit: SelectionHit) => {
     setDraft('')
@@ -113,7 +111,6 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     setMarks([])
     setMenu(undefined)
     setBanner('')
-    setNotesOpen(false)
     if (paperPath === '') {
       setStatus('empty')
       return () => { cancelled = true }
@@ -200,8 +197,6 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     runMark({ ref: paperPath, kind: 'highlight', quote, page: pageNumber, comment: draft })
   }
 
-  const notes = paperPath === '' ? null : renderSlot('agentero.pdf.notes', { paperPath })
-  const notesAvailable = notes !== null && notes !== undefined
   const selectionMenu = menu === undefined ? null : (
     <SelectionMenu
       screen={{ x: menu.screenX, y: menu.screenY }}
@@ -252,23 +247,10 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
               onSetPdfTone={setPdfTone}
               onSelect={onSelect}
               menu={selectionMenu}
-              notesOpen={notesOpen}
-              notesAvailable={notesAvailable}
-              onToggleNotes={() => { setNotesOpen(open => !open) }}
               t={t}
             />
           </div>
         </div>
-        {notes === null || notes === undefined ? null : (
-          <div
-            className={cn(
-              'min-h-0 min-w-0 shrink-0 overflow-auto border-s border-border',
-              notesOpen ? 'w-[22rem]' : 'hidden',
-            )}
-          >
-            {notes}
-          </div>
-        )}
       </div>
     )
   }
