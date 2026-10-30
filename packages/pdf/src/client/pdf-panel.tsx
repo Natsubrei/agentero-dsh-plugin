@@ -105,6 +105,7 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
   const [draft, setDraft] = useState('')
   const [banner, setBanner] = useState('')
   const [busy, setBusy] = useState(false)
+  const [selectionClearVersion, setSelectionClearVersion] = useState(0)
   const [pdfTone, setPdfTone] = useState<PdfPaperTone>('white')
 
   const onSelect = useCallback((hit: SelectionHit) => {
@@ -189,6 +190,7 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     setMenu(undefined)
     void addMark(body).then((translation) => {
       if (translation !== undefined) setBanner(translation)
+      setSelectionClearVersion((version) => version + 1)
       refreshMarks()
     }).catch((error: unknown) => {
       const text = error instanceof Error ? error.message : ''
@@ -318,6 +320,7 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
               onSetPdfTone={setPdfTone}
               onSelect={onSelect}
               onDeselect={onDeselect}
+              selectionClearVersion={selectionClearVersion}
               saveBookmarks={(nodes) => saveBookmarks(paperPath, nodes)}
               saveVisual={saveVisual}
               translate={translate}

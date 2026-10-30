@@ -99,6 +99,8 @@ interface EmbedReaderProps {
   /** Translate one page's text through the host. */
   translate: (text: string) => Promise<string>
   menu: ReactNode
+  /** Increment after a mark is saved so the blue selection does not cover it. */
+  selectionClearVersion: number
   t: PdfT
 }
 
@@ -187,7 +189,7 @@ export function EmbedReader(props: EmbedReaderProps): ReactNode {
 type ReaderChromeProps = EmbedReaderProps & { engine: PdfEngine }
 
 function ReaderChrome(props: ReaderChromeProps): ReactNode {
-  const { docId, marks, pdfTone, onSetPdfTone, onSelect, onDeselect, saveBookmarks, saveVisual, translate, menu, engine, t } = props
+  const { docId, marks, pdfTone, onSetPdfTone, onSelect, onDeselect, saveBookmarks, saveVisual, translate, menu, selectionClearVersion, engine, t } = props
   const hostRef = useRef<HTMLDivElement>(null)
   const pageFocusedRef = useRef(false)
   const [pageField, setPageField] = useState('1')
@@ -206,6 +208,11 @@ function ReaderChrome(props: ReaderChromeProps): ReactNode {
   const [translateOpen, setTranslateOpen] = useState(false)
   const [hint, setHint] = useState<{ text: string, error: boolean } | undefined>(undefined)
   const hintTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  useEffect(() => {
+    if (selectionClearVersion === 0 || selection === null) return
+    selection.forDocument(docId).clear()
+  }, [selection, docId, selectionClearVersion])
 
   const showHint = useCallback((text: string, error: boolean): void => {
     setHint({ text, error })
