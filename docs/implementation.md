@@ -232,7 +232,7 @@ open(kind, id): boolean
 - 同样三个 inject。语言包 `agentero.notes`，中文标题「笔记」。
 - 正文在左，笔记列表在右，默认收起。格式条常驻在顶部，列表开关在右上角。打开就是 Plate，没有单独的阅读/编辑切换。磁盘仍是 Markdown：打开时反序列化，改动停顿后序列化再 `PUT`。`[[...]]` 原样显示，不解析。
 - 节点包括段落、标题、行内样式、列表、引用、分隔线、围栏代码、链接、表格和公式。公式用 KaTeX 的 MathML，不打包字体。光标在正文里时，底部浮出格式条。查找用 Cmd/Ctrl+F，不占常驻一行。
-- 只覆盖 `notes/`。论文 `NOTES.md` 走同一个编辑器，入口在 PDF 页的笔记槽。
+- 只覆盖 `notes/`。论文 `NOTES.md` 走同一个编辑器，从 PDF 底栏的笔记按钮进入。
 
 ### PDF 表面
 
@@ -250,11 +250,13 @@ open(kind, id): boolean
 
 笔记包 `slots.inject('agentero.pdf.notes')`。读写 `papers/<id>/NOTES.md`。文件不存在时当成空笔记，保存会创建它。论文目录必须已经存在。笔记库列表仍然只列 `notes/`。
 
+PDF 打开时笔记列默认收起。底栏的笔记按钮按需展开或收起；笔记组件保持挂载，所以收起不会丢掉未保存的草稿。
+
 ## 待办
 
 T4 到 T8 的代码已经在仓库里，`corepack pnpm build` 通过。T9 用 `dsh plugin --profile web add` 装进 `~/.dsh/profiles/web`，patch 写了 Vault `/Users/qychen/03-Knowledge/agentero-dsh` 和 `target/debug/agentero-cli`。`dsh web --no-open` 打印了 `[agentero] plugin loaded`。`desktop` 这个名字被 CLI 留给 Electron，不能拿来 `dsh web`。
 
-已点过：文献表列出 RM-R1，点开后 PDF 出字，右侧是该篇 NOTES.md，笔记库三篇独立笔记能渲染标题。`POST /agentero/api/papers/tags` 加上再删掉 `dsh-smoke`，列表回到空标签。`GET /agentero/api/pdf` 返回 PDF 字节。
+已点过：文献表列出 RM-R1，点开后 PDF 出字，笔记列默认收起，底栏笔记按钮可展开该篇 NOTES.md，笔记库三篇独立笔记能渲染标题。`POST /agentero/api/papers/tags` 加上再删掉 `dsh-smoke`，列表回到空标签。`GET /agentero/api/pdf` 返回 PDF 字节。
 
 还没做：从 patch 拿掉一行再启动的解耦冒烟、划词高亮和加入会话、模型工具在真实会话里被调用。导出 BibTeX 和 `discover arxiv` 的路由通了，CLI 连不上 `translation-server.agentero.app` 和 `export.arxiv.org`，返回 502。T10 仍然排在后面。下面各节是当时的实现说明，不要按「未做」重写阅读器。
 
@@ -299,13 +301,13 @@ children: {
 }
 ```
 
-面板在 PDF 右侧 `renderSlot('agentero.pdf.notes', { paperPath })`。槽空着就只画 PDF。
+面板在 PDF 右侧 `renderSlot('agentero.pdf.notes', { paperPath })`，但列默认 `hidden`；底栏笔记按钮切换显示。槽空着时按钮不出现，PDF 占满宽度。
 
 笔记包 `ctx.slots.inject('agentero.pdf.notes', () => register(...))`。组件用笔记包里的 Plate 编辑器和读写回调。读：`GET /agentero/api/notes/file?path=` + `paperPath + '/NOTES.md'`（注意 path 已含 `papers/...`，不要再加前缀；拼接前规范化斜杠）。写：现有 PUT 拒绝 `notes/` 以外的路径。要保存论文笔记，必须给 PUT 增加一条允许：Vault 相对路径匹配 `papers/<单段>/NOTES.md`，仍然禁止 `..` 和跑出 Vault。不要把任意文件的写权限放开。
 
 笔记库列表仍然只列 `notes/`，不要把每篇论文的 `NOTES.md` 再列进去。
 
-验收：打开论文时右侧是该篇 `NOTES.md`。卸掉笔记插件，PDF 仍能翻页。卸掉 PDF 插件，笔记库自己的面板仍能编辑 `notes/`。
+验收：打开论文时右侧没有笔记列；点底栏笔记按钮后才出现该篇 `NOTES.md`，再点收起。卸掉笔记插件，PDF 仍能翻页且没有笔记按钮。卸掉 PDF 插件，笔记库自己的面板仍能编辑 `notes/`。
 
 ### T6 划词
 
@@ -369,7 +371,7 @@ Host 用 `ctx.tools.register`（见 `deepseek-harness/docs/cookbook/adding-a-too
 2. `dsh plugin --profile agentero add` 本仓库。`dump-config` 能看到四行。
 3. profile 的 patch 写上真实 `vault` 和 `agenteroBin`。
 4. `dsh web --profile agentero --no-open`。终端有 `[agentero] plugin loaded`。
-5. 侧栏能打开文献、笔记、PDF。文献表有该 Vault 的论文。点一篇能翻页。右侧能改 `NOTES.md` 并且磁盘上变了。划一句高亮，`marks/` 里出现记录，刷新页面后高亮还在。加入对话后回到原来的会话，下一轮模型能看见这句和页码。
+5. 侧栏能打开文献、笔记、PDF。文献表有该 Vault 的论文。点一篇能翻页，默认不显示笔记列；点底栏笔记按钮后右侧能改 `NOTES.md` 并且磁盘上变了。划一句高亮，`marks/` 里出现记录，刷新页面后高亮还在。加入对话后回到原来的会话，下一轮模型能看见这句和页码。
 6. 从 patch 里临时拿掉 `agentero-pdf` 再启动：文献和笔记仍在。拿掉笔记插件：PDF 仍能翻页。
 
 测试用的论文用 Vault 里已经有的，或 `agentero import` 两三篇 arXiv。不要把 PDF 二进制提交进 git。

@@ -91,6 +91,7 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
   const [banner, setBanner] = useState('')
   const [busy, setBusy] = useState(false)
   const [pdfTone, setPdfTone] = useState<PdfPaperTone>('white')
+  const [notesOpen, setNotesOpen] = useState(false)
 
   const onSelect = useCallback((hit: SelectionHit) => {
     setDraft('')
@@ -109,6 +110,7 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     setMarks([])
     setMenu(undefined)
     setBanner('')
+    setNotesOpen(false)
     if (paperPath === '') {
       setStatus('empty')
       return () => { cancelled = true }
@@ -196,6 +198,7 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
   }
 
   const notes = paperPath === '' ? null : renderSlot('agentero.pdf.notes', { paperPath })
+  const notesAvailable = notes !== null && notes !== undefined
   const selectionMenu = menu === undefined ? null : (
     <SelectionMenu
       screen={{ x: menu.screenX, y: menu.screenY }}
@@ -246,12 +249,22 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
               onSetPdfTone={setPdfTone}
               onSelect={onSelect}
               menu={selectionMenu}
+              notesOpen={notesOpen}
+              notesAvailable={notesAvailable}
+              onToggleNotes={() => { setNotesOpen(open => !open) }}
               t={t}
             />
           </div>
         </div>
         {notes === null || notes === undefined ? null : (
-          <div className="w-[22rem] min-h-0 min-w-0 shrink-0 overflow-auto border-s border-border">{notes}</div>
+          <div
+            className={cn(
+              'min-h-0 min-w-0 shrink-0 overflow-auto border-s border-border',
+              notesOpen ? 'w-[22rem]' : 'hidden',
+            )}
+          >
+            {notes}
+          </div>
         )}
       </div>
     )
