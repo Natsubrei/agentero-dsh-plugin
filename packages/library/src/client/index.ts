@@ -44,6 +44,7 @@ const zh = {
   deletePaper: '删除',
   download: '下载',
   addTag: '标签',
+  removeTag: '移除标签',
   confirmDelete: '移到回收站？',
   actionFailed: '操作失败',
 }
@@ -72,6 +73,7 @@ const en = {
   deletePaper: 'Delete',
   download: 'Download',
   addTag: 'Tag',
+  removeTag: 'Remove tag',
   confirmDelete: 'Move to the recycle bin?',
   actionFailed: 'Action failed',
 }

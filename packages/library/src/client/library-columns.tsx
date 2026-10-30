@@ -76,29 +76,18 @@ export const COLUMN_META: Record<ColumnKey, ColumnDef> = {
       <td className='min-w-0 max-w-0 overflow-hidden px-3 py-2.5'>
         <div className='flex flex-wrap items-center gap-1'>
           {paper.tags.map(tag => (
-            <span
+            <PaperTagChip
               key={tag.name}
-              className='inline-flex cursor-pointer'
-              onClick={(event) => {
-                event.stopPropagation()
-                if (ctx.busy) return
-                const target = event.target
-                if (target instanceof Element && target.closest('button')) return
-                ctx.onRemoveTag(tag.name)
-              }}
-            >
-              <PaperTagChip
-                tag={tag}
-                trailing={(
-                  <PaperTagRemoveButton
-                    tagName={tag.name}
-                    label={tag.name}
-                    disabled={ctx.busy}
-                    onRemove={ctx.onRemoveTag}
-                  />
-                )}
-              />
-            </span>
+              tag={tag}
+              trailing={(
+                <PaperTagRemoveButton
+                  tagName={tag.name}
+                  label={`${ctx.t('removeTag')} ${tag.name}`}
+                  disabled={ctx.busy}
+                  onRemove={ctx.onRemoveTag}
+                />
+              )}
+            />
           ))}
           <Input
             value={ctx.tagDraft}
