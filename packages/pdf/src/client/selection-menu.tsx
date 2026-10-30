@@ -36,7 +36,6 @@ type SelectionMenuProps = {
 	onHighlight: (color: HighlightColor) => void;
 	onComment: () => void;
 	onTranslate: () => void;
-	onCite: () => void;
 	onAsk: () => void;
 	onDraftChange: (value: string) => void;
 	onSubmitDraft: () => void;
@@ -126,7 +125,6 @@ export function SelectionMenu({
 	onHighlight,
 	onComment,
 	onTranslate,
-	onCite,
 	onAsk,
 	onDraftChange,
 	onSubmitDraft,
@@ -275,16 +273,6 @@ export function SelectionMenu({
 						onClick={onAsk}
 					>
 						<span>{t("ask")}</span>
-					</button>
-					<button
-						type="button"
-						className={TEXT_ACTION}
-						aria-label={t("cite")}
-						disabled={busy}
-						onPointerDown={(event) => event.preventDefault()}
-						onClick={onCite}
-					>
-						<span>{t("cite")}</span>
 					</button>
 				</TooltipProvider>
 			) : (

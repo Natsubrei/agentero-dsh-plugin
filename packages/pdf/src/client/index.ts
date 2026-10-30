@@ -134,7 +134,7 @@ export function apply(ctx: Context): void {
     ctx.sidebarRight.openTab(TAB_KIND, { params: { ref: id } })
   }))
 
-  const face: Omit<PdfInjected, 'cite' | 'ask'> = {
+  const face: Omit<PdfInjected, 'ask'> = {
     async loadPdf(ref) {
       const response = await request(`/agentero/api/pdf?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
       if (!response.ok) {

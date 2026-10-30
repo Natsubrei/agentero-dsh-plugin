@@ -58,8 +58,6 @@ export interface PdfInjected {
   loadPdf: (ref: string) => Promise<ArrayBuffer>
   loadMarks: (ref: string) => Promise<PaintMark[]>
   addMark: (body: MarkAdd) => Promise<string | undefined>
-  /** Append the citation to this session's composer without sending it. */
-  cite: (text: string) => Promise<void>
   /** Send a question and citation as a new conversation turn. */
   ask: (text: string) => Promise<void>
   /** Write the PDF outline back to the file; resolves after the host saved it. */
@@ -98,7 +96,7 @@ export function PdfTitle({ useTabInfo, t }: PropsRuntime<'sidebar.right.pane.tab
 }
 
 export function PdfPanel(props: PdfPanelProps): ReactNode {
-  const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, cite, ask, saveBookmarks, translate } = props
+  const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, ask, saveBookmarks, translate } = props
   const paperPath = paperRef(useTabInfo().tab.navigation.params)
   const [status, setStatus] = useState<'empty' | 'loading' | 'missing' | 'error' | 'ready'>('empty')
   const [message, setMessage] = useState('')
@@ -201,24 +199,6 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     }).finally(() => { setBusy(false) })
   }
 
-  const citeQuote = (): void => {
-    if (menu === undefined || busy) return
-    if (sessionId === undefined) {
-      setBanner(t('noSession'))
-      return
-    }
-    const lines = [`${paperPath} p.${menu.page}`, menu.quote]
-    setBusy(true)
-    setBanner('')
-    void cite(lines.join('\n')).then(() => {
-      setMenu(undefined)
-      setBanner(t('cited'))
-    }).catch((error: unknown) => {
-      const text = error instanceof Error ? error.message : ''
-      setBanner(text === '' ? t('citeFailed') : text)
-    }).finally(() => { setBusy(false) })
-  }
-
   const submitDraft = (): void => {
     if (menu === undefined || busy) return
     const quote = menu.quote
@@ -299,7 +279,6 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
           pageSize: menu.pageSize,
         })
       }}
-      onCite={() => { citeQuote() }}
       onAsk={() => { setMenu({ ...menu, mode: 'ask' }) }}
       onDraftChange={setDraft}
       onSubmitDraft={submitDraft}
