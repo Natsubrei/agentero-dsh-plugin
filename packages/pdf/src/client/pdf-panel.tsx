@@ -41,7 +41,7 @@ export interface PdfPageSize {
 
 export interface MarkAdd {
   ref: string
-  kind: 'highlight' | 'ask' | 'translate' | 'visual'
+  kind: 'highlight' | 'ask' | 'translate'
   quote: string
   page: number
   /** Page-point selection rectangles; lets the host write without the CLI. */
@@ -50,8 +50,6 @@ export interface MarkAdd {
   color?: HighlightColor
   comment?: string
   question?: string
-  /** Visual region crop (bare base64 PNG), stored under marks/assets. */
-  asset?: { mediaType: string, data: string }
 }
 
 export interface PdfInjected {
@@ -167,24 +165,6 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     if (paperPath === '') return
     void loadMarks(paperPath).then(setMarks).catch(() => { setBanner(t('markFailed')) })
   }
-
-  const saveVisual = useCallback(async (input: {
-    page: number
-    rects: PdfRect[]
-    pageSize: PdfPageSize
-    asset: { mediaType: string, data: string }
-  }): Promise<void> => {
-    await addMark({
-      ref: paperPath,
-      kind: 'visual',
-      quote: '',
-      page: input.page,
-      rects: input.rects,
-      pageSize: input.pageSize,
-      asset: input.asset,
-    })
-    refreshMarks()
-  }, [paperPath, addMark, loadMarks, t])
 
   const runMark = (body: MarkAdd): void => {
     setBusy(true)
@@ -308,7 +288,6 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
               onDeselect={onDeselect}
               selectionClearVersion={selectionClearVersion}
               saveBookmarks={(nodes) => saveBookmarks(paperPath, nodes)}
-              saveVisual={saveVisual}
               translate={translate}
               menu={selectionMenu}
               t={t}

@@ -46,9 +46,6 @@ import { PdfLinkLayer } from './link-layer'
 import { PdfOutlineLayer } from './outline'
 import { PanDragHandler } from './pan-handler'
 import { PdfToolbar } from './pdf-toolbar'
-import { type PdfRegion } from './region'
-import { cropPdfRegion } from './region-crop'
-import { PdfRegionSelectLayer } from './region-select'
 import { PdfTranslatePanel } from './translate-panel'
 import {
   PDF_PAGE_RASTER_DARK_CLASS,
@@ -57,8 +54,7 @@ import {
 } from './page-theme'
 import { PdfBottomBar } from './pdf-bottom-bar'
 import { DEFAULT_HIGHLIGHT_COLOR, highlightFill } from './palette'
-import { PDF_FLOAT_CARD } from './pdf-chrome-surface'
-import type { PaintMark, PdfPageSize, PdfRect } from './pdf-panel'
+import type { PaintMark, PdfRect } from './pdf-panel'
 import { PDF_ZOOM_MAX, PDF_ZOOM_MIN } from './zoom'
 
 /** Marks a rendered page so the selection menu can map page points to the screen. */
@@ -89,13 +85,6 @@ interface EmbedReaderProps {
   onDeselect: () => void
   /** Persist the outline back into the PDF; resolves after the host wrote it. */
   saveBookmarks: (nodes: EditableBookmark[]) => Promise<void>
-  /** Persist a cropped region as a visual mark. */
-  saveVisual: (input: {
-    page: number
-    rects: PdfRect[]
-    pageSize: PdfPageSize
-    asset: { mediaType: string, data: string }
-  }) => Promise<void>
   /** Translate one page's text through the host. */
   translate: (text: string) => Promise<string>
   menu: ReactNode
@@ -189,7 +178,7 @@ export function EmbedReader(props: EmbedReaderProps): ReactNode {
 type ReaderChromeProps = EmbedReaderProps & { engine: PdfEngine }
 
 function ReaderChrome(props: ReaderChromeProps): ReactNode {
-  const { docId, marks, pdfTone, onSetPdfTone, onSelect, onDeselect, saveBookmarks, saveVisual, translate, menu, selectionClearVersion, engine, t } = props
+  const { docId, marks, pdfTone, onSetPdfTone, onSelect, onDeselect, saveBookmarks, translate, menu, selectionClearVersion, engine, t } = props
   const hostRef = useRef<HTMLDivElement>(null)
   const pageFocusedRef = useRef(false)
   const [pageField, setPageField] = useState('1')
@@ -204,43 +193,12 @@ function ReaderChrome(props: ReaderChromeProps): ReactNode {
   const documentState = useDocumentState(docId)
   const documentStateRef = useRef(documentState)
   documentStateRef.current = documentState
-  const [regionSelecting, setRegionSelecting] = useState(false)
   const [translateOpen, setTranslateOpen] = useState(false)
-  const [hint, setHint] = useState<{ text: string, error: boolean } | undefined>(undefined)
-  const hintTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     if (selectionClearVersion === 0 || selection === null) return
     selection.forDocument(docId).clear()
   }, [selection, docId, selectionClearVersion])
-
-  const showHint = useCallback((text: string, error: boolean): void => {
-    setHint({ text, error })
-    if (hintTimer.current !== undefined) clearTimeout(hintTimer.current)
-    hintTimer.current = setTimeout(() => setHint(undefined), 2600)
-  }, [])
-
-  useEffect(() => () => {
-    if (hintTimer.current !== undefined) clearTimeout(hintTimer.current)
-  }, [])
-
-  // ⌘. arms the region marquee while the reader is hovered or focused.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && regionSelecting) {
-        setRegionSelecting(false)
-        return
-      }
-      if (!(event.metaKey || event.ctrlKey) || event.key !== '.') return
-      const host = hostRef.current
-      if (host === null) return
-      if (!host.matches(':hover') && !host.contains(document.activeElement)) return
-      event.preventDefault()
-      setRegionSelecting((value) => !value)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [regionSelecting, hostRef])
 
   useEffect(() => {
     if (pageFocusedRef.current) return
@@ -302,25 +260,6 @@ function ReaderChrome(props: ReaderChromeProps): ReactNode {
     scroll.provides?.scrollToPage({ pageNumber: next })
   }
 
-  const onRegionSelect = useCallback((pageNumber: number, region: PdfRegion): void => {
-    setRegionSelecting(false)
-    const document = documentStateRef.current?.document
-    const pageInfo = document?.pages[pageNumber - 1]
-    if (engine === undefined || document === null || document === undefined || pageInfo === undefined) return
-    void cropPdfRegion({ engine, document, pageIndex: pageNumber - 1, region })
-      .then((asset) => saveVisual({
-        page: pageNumber,
-        pageSize: pageInfo.size,
-        rects: [{
-          origin: { x: region.x * pageInfo.size.width, y: region.y * pageInfo.size.height },
-          size: { width: region.w * pageInfo.size.width, height: region.h * pageInfo.size.height },
-        }],
-        asset,
-      }))
-      .then(() => showHint(t('regionSaved'), false))
-      .catch(() => showHint(t('regionFailed'), true))
-  }, [engine, saveVisual, showHint, t])
-
   const translatePage = useCallback(async (pageIndex: number): Promise<string> => {
     const document = documentStateRef.current?.document
     const pageInfo = document?.pages[pageIndex]
@@ -337,11 +276,9 @@ function ReaderChrome(props: ReaderChromeProps): ReactNode {
       layout={layout}
       marks={marks}
       pdfTone={pdfTone}
-      regionSelecting={regionSelecting}
-      onRegionSelect={onRegionSelect}
       t={t}
     />
-  ), [docId, marks, pdfTone, regionSelecting, onRegionSelect, t])
+  ), [docId, marks, pdfTone, t])
 
   return (
     <div className="relative h-full min-h-0">
@@ -358,10 +295,8 @@ function ReaderChrome(props: ReaderChromeProps): ReactNode {
       {menu}
       <PdfFindLayer docId={docId} hostRef={hostRef} t={t} />
       <PdfToolbar
-        regionSelecting={regionSelecting}
         translating={false}
         translateOpen={translateOpen}
-        onToggleRegion={() => setRegionSelecting((value) => !value)}
         onToggleTranslate={() => setTranslateOpen((value) => !value)}
         t={t}
       />
@@ -373,18 +308,6 @@ function ReaderChrome(props: ReaderChromeProps): ReactNode {
         onClose={() => setTranslateOpen(false)}
         t={t}
       />
-      {hint === undefined ? null : (
-        <p
-          className={cn(
-            'pointer-events-none absolute top-14 left-1/2 z-30 -translate-x-1/2 px-3 py-1.5 text-xs',
-            PDF_FLOAT_CARD,
-            hint.error && 'text-destructive',
-          )}
-          role="status"
-        >
-          {hint.text}
-        </p>
-      )}
       <PdfOutlineLayer
         docId={docId}
         currentPage={Math.max(page, 1)}
@@ -413,11 +336,9 @@ function PdfPage(props: {
   layout: PageLayout
   marks: readonly PaintMark[]
   pdfTone: PdfPaperTone
-  regionSelecting: boolean
-  onRegionSelect: (page: number, region: PdfRegion) => void
   t: PdfT
 }): ReactNode {
-  const { documentId, layout, marks, pdfTone, regionSelecting, onRegionSelect, t } = props
+  const { documentId, layout, marks, pdfTone, t } = props
   const documentState = useDocumentState(documentId)
   const size = documentState?.document?.pages[layout.pageIndex]?.size
   const cssW = layout.rotatedWidth || layout.width
@@ -478,11 +399,6 @@ function PdfPage(props: {
       />
       <PdfSearchLayer docId={documentId} pageIndex={layout.pageIndex} />
       <SelectionLayer documentId={documentId} pageIndex={layout.pageIndex} />
-      <PdfRegionSelectLayer
-        active={regionSelecting}
-        label={t('regionLabel')}
-        onSelect={(region) => onRegionSelect(pageNumber, region)}
-      />
       <CommentCards marks={pageMarks} pageHeight={cssH} pageSize={pageSize} t={t} />
     </PagePointerProvider>
   )
