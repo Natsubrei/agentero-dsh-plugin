@@ -1,5 +1,13 @@
 /* Agentero surface tokens for the dsh plugin. Utilities inherit these variables. */
 
+/*
+ * `dark:` utilities follow the same signal as the token blocks below: the
+ * harness toggles `data-ds-dark-theme` on <body>. Tailwind's default dark
+ * variant is `prefers-color-scheme`, which ignores the in-app theme and would
+ * flip rings/borders against the wrong background.
+ */
+@custom-variant dark (&:where(body[data-ds-dark-theme] *));
+
 :root {
 	/*
 	 * Default chrome = platform UI sans (SF Pro / Segoe UI + CJK). Geist stays
@@ -106,69 +114,6 @@
 }
 
 .agentero-surface {
-	--background: oklch(0.155 0.006 260);
-	--foreground: oklch(0.98 0.004 260);
-	--card: oklch(0.215 0.008 260);
-	--card-foreground: oklch(0.98 0.004 260);
-	--popover: oklch(0.215 0.008 260);
-	--popover-foreground: oklch(0.98 0.004 260);
-	--primary: oklch(0.94 0.006 260);
-	--primary-foreground: oklch(0.22 0.01 260);
-	--default-primary: oklch(0.94 0.006 260);
-	--default-ring: oklch(0.58 0.02 260);
-	--secondary: oklch(0.255 0.008 260);
-	--secondary-foreground: oklch(0.98 0.004 260);
-	--muted: oklch(0.255 0.008 260);
-	--muted-foreground: oklch(0.72 0.012 260);
-	--accent: oklch(0.27 0.01 260);
-	--accent-foreground: oklch(0.98 0.004 260);
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: oklch(0.98 0.004 260 / 12%);
-	--input: oklch(0.98 0.004 260 / 16%);
-	--ring: oklch(0.58 0.02 260);
-	--chart-1: oklch(0.87 0.01 260);
-	--chart-2: oklch(0.556 0.014 260);
-	--chart-3: oklch(0.439 0.014 260);
-	--chart-4: oklch(0.371 0.012 260);
-	--chart-5: oklch(0.269 0.01 260);
-	--sidebar: oklch(0.18 0.007 260);
-	--sidebar-foreground: oklch(0.98 0.004 260);
-	--sidebar-primary: oklch(0.62 0.18 255);
-	--sidebar-primary-foreground: oklch(0.99 0.001 260);
-	--sidebar-accent: oklch(0.27 0.01 260);
-	--sidebar-accent-foreground: oklch(0.98 0.004 260);
-	--sidebar-border: oklch(0.98 0.004 260 / 12%);
-	--sidebar-ring: oklch(0.58 0.02 260);
-	--brand: oklch(0.707 0.165 254.624);
-	--highlight: oklch(0.852 0.199 91.936);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  color: var(--foreground);
-  font-family: var(--agentero-font-sans);
-  font-size: 0.8125rem;
-  line-height: 1.3846;
-  height: 100%;
-  min-height: 0;
-  min-width: 0;
-}
-
-html:not(.dark):not([data-theme='dark']) .agentero-surface {
 	--background: oklch(0.995 0.002 260);
 	--foreground: oklch(0.21 0.008 260);
 	--card: oklch(1 0.001 260);
@@ -206,5 +151,77 @@ html:not(.dark):not([data-theme='dark']) .agentero-surface {
 	--sidebar-ring: oklch(0.62 0.02 260);
 	--brand: oklch(0.623 0.214 259.815);
 	--highlight: oklch(0.852 0.199 91.936);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  color-scheme: light;
+  color: var(--foreground);
+  font-family: var(--agentero-font-sans);
+  font-size: 0.8125rem;
+  line-height: 1.3846;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+/*
+ * Dark palette. The harness paints its theme on <body data-ds-dark-theme>;
+ * the standalone app used html.dark / html[data-theme='dark']. Match both so
+ * the surface never keeps light ink over a dark host background.
+ */
+body[data-ds-dark-theme] .agentero-surface,
+html.dark .agentero-surface,
+html[data-theme='dark'] .agentero-surface {
+	--background: oklch(0.155 0.006 260);
+	--foreground: oklch(0.98 0.004 260);
+	--card: oklch(0.215 0.008 260);
+	--card-foreground: oklch(0.98 0.004 260);
+	--popover: oklch(0.215 0.008 260);
+	--popover-foreground: oklch(0.98 0.004 260);
+	--primary: oklch(0.94 0.006 260);
+	--primary-foreground: oklch(0.22 0.01 260);
+	--default-primary: oklch(0.94 0.006 260);
+	--default-ring: oklch(0.58 0.02 260);
+	--secondary: oklch(0.255 0.008 260);
+	--secondary-foreground: oklch(0.98 0.004 260);
+	--muted: oklch(0.255 0.008 260);
+	--muted-foreground: oklch(0.72 0.012 260);
+	--accent: oklch(0.27 0.01 260);
+	--accent-foreground: oklch(0.98 0.004 260);
+	--destructive: oklch(0.704 0.191 22.216);
+	--border: oklch(0.98 0.004 260 / 12%);
+	--input: oklch(0.98 0.004 260 / 16%);
+	--ring: oklch(0.58 0.02 260);
+	--chart-1: oklch(0.87 0.01 260);
+	--chart-2: oklch(0.556 0.014 260);
+	--chart-3: oklch(0.439 0.014 260);
+	--chart-4: oklch(0.371 0.012 260);
+	--chart-5: oklch(0.269 0.01 260);
+	--sidebar: oklch(0.18 0.007 260);
+	--sidebar-foreground: oklch(0.98 0.004 260);
+	--sidebar-primary: oklch(0.62 0.18 255);
+	--sidebar-primary-foreground: oklch(0.99 0.001 260);
+	--sidebar-accent: oklch(0.27 0.01 260);
+	--sidebar-accent-foreground: oklch(0.98 0.004 260);
+	--sidebar-border: oklch(0.98 0.004 260 / 12%);
+	--sidebar-ring: oklch(0.58 0.02 260);
+	--brand: oklch(0.707 0.165 254.624);
+	--highlight: oklch(0.852 0.199 91.936);
+	color-scheme: dark;
 }
 
