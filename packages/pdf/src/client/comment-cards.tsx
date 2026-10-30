@@ -29,6 +29,8 @@ export type CommentMark = {
 	note: string;
 	rects: CommentRect[];
 	space: "norm" | "pt";
+	/** Vault-relative PNG for a visual region mark. */
+	asset?: string;
 };
 
 type CommentCardsProps = {
@@ -65,17 +67,24 @@ function anchorY(mark: CommentMark, pageSize: { width: number; height: number })
 function swatchForKind(kind: string): HighlightColor {
 	if (kind === "ask") return "green";
 	if (kind === "translate") return "blue";
+	if (kind === "visual") return "purple";
 	return "yellow";
 }
 
+/** Vault-relative crop path → the host's image route. */
+function assetUrl(path: string): string {
+	return `/agentero/api/marks/asset?path=${encodeURIComponent(path)}`;
+}
+
 /**
- * One static card per current-page mark that has a note, pinned to the page's
- * right edge. Chrome only: the in-place editor, crop tool, and action bar stay out.
+ * One static card per current-page mark that has a note or a crop, pinned to
+ * the page's right edge. Chrome only: the in-place editor, crop tool, and
+ * action bar stay out.
  */
 export function CommentCards({ marks, pageHeight, pageSize, t }: CommentCardsProps) {
 	if (pageHeight <= 0 || pageSize.height <= 0) return null;
 	const sorted = marks
-		.filter((mark) => mark.note.trim() !== "" && mark.rects.length > 0)
+		.filter((mark) => (mark.note.trim() !== "" || mark.asset !== undefined) && mark.rects.length > 0)
 		.map((mark) => ({ mark, anchor: anchorY(mark, pageSize) }))
 		.sort((a, b) => a.anchor - b.anchor || a.mark.id.localeCompare(b.mark.id));
 	if (sorted.length === 0) return null;
@@ -84,7 +93,8 @@ export function CommentCards({ marks, pageHeight, pageSize, t }: CommentCardsPro
 		id: item.mark.id,
 		kind: item.mark.kind,
 		note: item.mark.note,
-		heightPx: estimateHeight(item.mark.note),
+		asset: item.mark.asset,
+		heightPx: estimateHeight(item.mark.note) + (item.mark.asset === undefined ? 0 : 92),
 		topPx: item.anchor * pageHeight,
 	}));
 	for (let i = 0; i < laid.length; i += 1) {
@@ -128,6 +138,14 @@ export function CommentCards({ marks, pageHeight, pageSize, t }: CommentCardsPro
 								)}
 								aria-hidden
 							/>
+							{card.asset === undefined ? null : (
+								<img
+									src={assetUrl(card.asset)}
+									alt=""
+									loading="lazy"
+									className="mt-1 max-h-20 w-full rounded border border-border/50 object-cover object-top"
+								/>
+							)}
 							<div
 								className={cn(
 									"mt-1 max-h-[3.75rem] overflow-hidden break-words text-sm leading-relaxed whitespace-pre-wrap text-foreground/80 group-hover:max-h-none group-hover:overflow-x-auto",

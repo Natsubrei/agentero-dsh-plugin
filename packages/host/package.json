@@ -47,7 +47,8 @@
     }
   },
   "dependencies": {
-    "@embedpdf/pdfium": "2.14.4"
+    "@embedpdf/pdfium": "2.14.4",
+    "pdf-lib": "1.17.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.5"

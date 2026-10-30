@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
+import { lstat, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import type { ChildProcess } from 'node:child_process'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
@@ -9,9 +10,10 @@ import { cliFailure, runAgentero } from './cli-run.js'
 import {
   changeTag, deletePaper, discoverArxiv, downloadPaper, exportBib, importBib, importId, setRead,
 } from './catalog.js'
-import { listVaultNotes, readVaultFile, writeVaultNote } from './notes-files.js'
+import { listVaultNotes, locateVaultPath, readVaultFile, within, writeVaultNote } from './notes-files.js'
 import { type MarkRect, readMarks, writeMark } from './marks-store.js'
-import { readVaultPdf } from './pdf-file.js'
+import { bookmarkNodesFrom, writePdfBookmarks } from './bookmarks-write.js'
+import { locateVaultPdf, readVaultPdf } from './pdf-file.js'
 import { handleRecommendRequest } from './recommend.js'
 import { registerTools } from './tools.js'
 
@@ -45,11 +47,17 @@ const NOTES_FILE_PATH = '/agentero/api/notes/file'
 
 /** PDF bytes for a paper directory or a `.pdf` path. */
 const PDF_PATH = '/agentero/api/pdf'
+/** Rewrite the outline (bookmarks) of one PDF. */
+const PDF_BOOKMARKS_PATH = '/agentero/api/pdf/bookmarks'
 const PDFIUM_WASM_PATH = '/agentero/api/pdfium.wasm'
 const require = createRequire(import.meta.url)
 
 /** List or add reading marks through the Agentero CLI. */
 const MARKS_PATH = '/agentero/api/marks'
+/** Serve the PNG crop behind a visual region mark. */
+const MARK_ASSET_PATH = '/agentero/api/marks/asset'
+/** Translate text with the CLI's free machine translation. */
+const TRANSLATE_PATH = '/agentero/api/translate'
 
 /** Queue a citation into the still-selected dsh session. */
 const CONTEXT_PATH = '/agentero/api/context'
@@ -81,6 +89,8 @@ const PAPER_LIST_TIMEOUT_MS = 20_000
 
 /** `mark add` may run PDFium and a translation request. */
 const MARK_ADD_TIMEOUT_MS = 90_000
+/** Free machine translation of one page. */
+const TRANSLATE_TIMEOUT_MS = 60_000
 
 /** Largest JSON body accepted by `PUT /agentero/api/notes/file`. */
 const NOTE_BODY_LIMIT = 8 * 1024 * 1024
@@ -372,9 +382,80 @@ async function handlePdf(settings: Config, req: IncomingMessage, res: ServerResp
   res.end(result.bytes)
 }
 
+/**
+ * Write the outline back into the PDF file.
+ * The browser sends the whole tree; the writer keeps original destinations and
+ * refuses signed or unsupported documents. The save is atomic (tmp + rename).
+ */
+async function handlePdfBookmarks(
+  settings: Config,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  if (req.method !== 'POST') {
+    res.statusCode = 405
+    res.setHeader('allow', 'POST')
+    res.end()
+    return
+  }
+  if (!requireVault(settings, res)) return
+  const raw = await readTextBody(req)
+  if (raw === undefined) {
+    sendJson(res, 400, { error: 'invalid body' })
+    req.destroy()
+    return
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    sendJson(res, 400, { error: 'invalid body' })
+    return
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    sendJson(res, 400, { error: 'invalid body' })
+    return
+  }
+  const record = parsed as Record<string, unknown>
+  const ref = typeof record.ref === 'string' ? record.ref.trim() : ''
+  if (ref === '') {
+    sendJson(res, 400, { error: 'invalid path' })
+    return
+  }
+  const nodes = bookmarkNodesFrom(record.nodes)
+  if (nodes === undefined) {
+    sendJson(res, 400, { error: 'invalid bookmarks' })
+    return
+  }
+  const located = await locateVaultPdf(settings.vault, ref)
+  if (located.status !== 200) {
+    sendJson(res, located.status, { error: located.error })
+    return
+  }
+  let saved: Uint8Array
+  try {
+    const bytes = await readFile(located.realPath)
+    saved = await writePdfBookmarks(bytes, nodes)
+  } catch (error) {
+    const text = error instanceof Error ? error.message : ''
+    sendJson(res, 422, { error: text === '' ? 'could not write bookmarks' : text })
+    return
+  }
+  const temp = `${located.realPath}.${process.pid}.${Date.now()}.tmp`
+  try {
+    await writeFile(temp, saved)
+    await rename(temp, located.realPath)
+  } catch {
+    await rm(temp, { force: true }).catch(() => undefined)
+    sendJson(res, 500, { error: 'could not save bookmarks' })
+    return
+  }
+  sendJson(res, 200, { ok: true })
+}
+
 interface MarkAddBody {
   ref: string
-  kind: 'highlight' | 'ask' | 'translate'
+  kind: 'highlight' | 'ask' | 'translate' | 'visual'
   quote: string
   page: number
   rects?: MarkRect[]
@@ -383,6 +464,7 @@ interface MarkAddBody {
   comment?: string
   question?: string
   to?: string
+  asset?: { mediaType: string, data: string }
 }
 
 function markRects(value: unknown): MarkRect[] | undefined {
@@ -391,7 +473,12 @@ function markRects(value: unknown): MarkRect[] | undefined {
   for (const item of value) {
     if (item === null || typeof item !== 'object' || Array.isArray(item)) return undefined
     const record = item as Record<string, unknown>
-    const { x, y, w, h } = record
+    const origin = record.origin !== null && typeof record.origin === 'object' ? record.origin as Record<string, unknown> : undefined
+    const size = record.size !== null && typeof record.size === 'object' ? record.size as Record<string, unknown> : undefined
+    const x = origin === undefined ? record.x : origin.x
+    const y = origin === undefined ? record.y : origin.y
+    const w = size === undefined ? record.w : size.width
+    const h = size === undefined ? record.h : size.height
     if (typeof x !== 'number' || typeof y !== 'number') return undefined
     if (typeof w !== 'number' || typeof h !== 'number') return undefined
     if (!Number.isFinite(x) || !Number.isFinite(y)) return undefined
@@ -422,14 +509,21 @@ function markAddFrom(raw: string): MarkAddBody | undefined {
     const quote = typeof record.quote === 'string' ? record.quote.trim() : ''
     const kind = record.kind
     const page = record.page
-    if (ref === '' || quote === '') return undefined
-    if (kind !== 'highlight' && kind !== 'ask' && kind !== 'translate') return undefined
+    if (ref === '' || (quote === '' && kind !== 'visual')) return undefined
+    if (kind !== 'highlight' && kind !== 'ask' && kind !== 'translate' && kind !== 'visual') return undefined
     if (typeof page !== 'number' || !Number.isInteger(page) || page < 1) return undefined
     const body: MarkAddBody = { ref, kind, quote, page }
     if (typeof record.comment === 'string' && record.comment.trim() !== '') body.comment = record.comment
     if (typeof record.question === 'string' && record.question.trim() !== '') body.question = record.question
     if (typeof record.to === 'string' && record.to.trim() !== '') body.to = record.to.trim()
     if (typeof record.color === 'string' && record.color.trim() !== '') body.color = record.color.trim()
+    const asset = record.asset
+    if (asset !== null && typeof asset === 'object' && !Array.isArray(asset)) {
+      const item = asset as Record<string, unknown>
+      const mediaType = typeof item.mediaType === 'string' ? item.mediaType : ''
+      const data = typeof item.data === 'string' ? item.data : ''
+      if (mediaType !== '' && data !== '') body.asset = { mediaType, data }
+    }
     const rects = markRects(record.rects)
     if (rects !== undefined) body.rects = rects
     const pageSize = markPageSize(record.pageSize)
@@ -510,6 +604,7 @@ async function handleMarks(
       ...(body.color === undefined ? {} : { color: body.color }),
       ...(body.comment === undefined ? {} : { comment: body.comment }),
       ...(body.question === undefined ? {} : { question: body.question }),
+      ...(body.asset === undefined ? {} : { asset: body.asset }),
     })
     if (!written.ok) {
       sendJson(res, written.status, { error: written.error })
@@ -532,6 +627,82 @@ async function handleMarks(
   if (body.to !== undefined) args.push('--to', body.to)
   const result = await runAgentero(settings.agenteroBin, args, MARK_ADD_TIMEOUT_MS, children)
   await finishCliJson(res, result, 'agentero mark add')
+}
+
+/** Serve one PNG crop stored under `<paper>/marks/assets`. */
+async function handleMarkAsset(
+  settings: Config,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.statusCode = 405
+    res.setHeader('allow', 'GET, HEAD')
+    res.end()
+    return
+  }
+  if (!requireVault(settings, res)) return
+  const rawPath = queryParam(req, 'path')
+  const relative = (rawPath ?? '').trim().replaceAll('\\', '/')
+  if (!/(^|\/)marks\/assets\/[^/]+\.png$/.test(relative)) {
+    sendJson(res, 400, { error: 'invalid path' })
+    return
+  }
+  const located = await locateVaultPath(settings.vault, relative)
+  if (!located.ok) {
+    sendJson(res, located.status, { error: located.error })
+    return
+  }
+  let real: string
+  try {
+    real = await realpath(located.location.lexical)
+  } catch {
+    sendJson(res, 404, { error: 'not found' })
+    return
+  }
+  if (!within(located.location.root, real, false)) {
+    sendJson(res, 400, { error: 'invalid path' })
+    return
+  }
+  const stat = await lstat(real)
+  if (!stat.isFile()) {
+    sendJson(res, 400, { error: 'invalid path' })
+    return
+  }
+  res.statusCode = 200
+  res.setHeader('content-type', 'image/png')
+  res.setHeader('cache-control', 'no-store')
+  if (req.method === 'HEAD') {
+    res.end()
+    return
+  }
+  res.end(await readFile(real))
+}
+
+/** Translate text through the CLI's free machine translation engines. */
+async function handleTranslate(
+  settings: Config,
+  req: IncomingMessage,
+  res: ServerResponse,
+  children: Set<ChildProcess>,
+): Promise<void> {
+  if (!requirePost(req, res) || !requireVault(settings, res)) return
+  const body = await readObject(req, res)
+  if (body === undefined) return
+  const text = typeof body.text === 'string' ? body.text.trim() : ''
+  if (text === '' || text.length > 20_000) {
+    sendJson(res, 400, { error: 'invalid body' })
+    return
+  }
+  const requested = typeof body.to === 'string' ? body.to.trim() : ''
+  const to = /^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})?$/.test(requested) ? requested : 'zh-CN'
+  const result = await runAgentero(
+    settings.agenteroBin,
+    ['--vault', settings.vault, '--json', 'translate', text, '--to', to],
+    TRANSLATE_TIMEOUT_MS,
+    children,
+  )
+  await finishCliJson(res, result, 'agentero translate')
 }
 
 function contextFrom(raw: string): { sessionId: string, text: string } | undefined {
@@ -796,8 +967,20 @@ async function handleApi(
     await handlePdf(settings, req, res)
     return
   }
+  if (pathname === PDF_BOOKMARKS_PATH) {
+    await handlePdfBookmarks(settings, req, res)
+    return
+  }
   if (pathname === MARKS_PATH) {
     await handleMarks(settings, req, res, children)
+    return
+  }
+  if (pathname === MARK_ASSET_PATH) {
+    await handleMarkAsset(settings, req, res)
+    return
+  }
+  if (pathname === TRANSLATE_PATH) {
+    await handleTranslate(settings, req, res, children)
     return
   }
   if (pathname === CONTEXT_PATH) {

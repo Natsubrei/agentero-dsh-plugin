@@ -85,10 +85,11 @@ function markFromWire(value: unknown): PaintMark | undefined {
     .filter((rect): rect is { x: number, y: number, w: number, h: number } => rect !== undefined)
   const note = typeof record.note === 'string' ? record.note : ''
   const space = record.space === 'pt' ? 'pt' : 'norm'
+  const asset = typeof record.asset === 'string' && record.asset !== '' ? record.asset : undefined
   const color = kind === 'highlight' && typeof record.color === 'string'
     ? normalizeHighlightColor(record.color)
     : undefined
-  return { id, kind, page, rects, space, note, ...(color === undefined ? {} : { color }) }
+  return { id, kind, page, rects, space, note, ...(asset === undefined ? {} : { asset }), ...(color === undefined ? {} : { color }) }
 }
 
 function translationOf(body: unknown): string | undefined {
@@ -165,6 +166,30 @@ export function apply(ctx: Context): void {
       })
       const parsed = await parseBody(response)
       if (!response.ok) throw new Error(errorText(parsed) ?? '')
+    },
+    async saveBookmarks(ref, nodes) {
+      const response = await fetch('/agentero/api/pdf/bookmarks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ref, nodes }),
+        cache: 'no-store',
+      })
+      const parsed = await parseBody(response)
+      if (!response.ok) throw new Error(errorText(parsed) ?? '')
+    },
+    async translate(text) {
+      const response = await fetch('/agentero/api/translate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text, to: 'zh-CN' }),
+        cache: 'no-store',
+      })
+      const parsed = await parseBody(response)
+      if (!response.ok) throw new Error(errorText(parsed) ?? '')
+      const data = envelopeData(parsed)
+      const translated = data?.text
+      if (typeof translated !== 'string' || translated.trim() === '') throw new Error('')
+      return translated
     },
   }
 

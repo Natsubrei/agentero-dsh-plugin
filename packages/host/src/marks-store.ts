@@ -50,6 +50,8 @@ export interface MarkItem {
   note: string
   /** Highlight palette key when the store has one. */
   color?: string
+  /** Vault-relative PNG for visual region marks. */
+  asset?: string
 }
 
 export type MarksReadResult =
@@ -58,7 +60,7 @@ export type MarksReadResult =
 
 export interface MarkWrite {
   ref: string
-  kind: 'highlight' | 'ask'
+  kind: 'highlight' | 'ask' | 'visual'
   quote: string
   page: number
   /** Page-point rectangles from the browser selection. */
@@ -68,6 +70,8 @@ export interface MarkWrite {
   color?: string
   comment?: string
   question?: string
+  /** Visual region crops: bare base64 PNG, stored under marks/assets. */
+  asset?: { mediaType: string, data: string }
 }
 
 export type MarksWriteResult =
@@ -213,6 +217,7 @@ function fromMarkFile(name: string, value: unknown): MarkItem | undefined {
     space: 'norm',
     rects,
     note: textOr(record.result) || textOr(record.comment),
+    ...(textOr(record.asset) === '' ? {} : { asset: textOr(record.asset) }),
   }
 }
 
@@ -244,7 +249,13 @@ export async function readMarks(vault: string, ref: string): Promise<MarksReadRe
   }
   for (const name of names) {
     try {
-      push(fromMarkFile(name, JSON.parse(await readFile(path.join(dir, name), 'utf8'))))
+      const mark = fromMarkFile(name, JSON.parse(await readFile(path.join(dir, name), 'utf8')))
+      // The JSON stores the desktop-compatible paper-relative crop path; the
+      // reader and the asset route need it vault-relative.
+      if (mark?.asset !== undefined && !mark.asset.startsWith('papers/') && !mark.asset.startsWith('/')) {
+        mark.asset = `${paper.dir.relative}/${mark.asset}`
+      }
+      push(mark)
     } catch {
       // A half-written or hand-edited mark must not hide the others.
     }
@@ -305,7 +316,7 @@ export async function writeMark(vault: string, body: MarkWrite): Promise<MarksWr
   const paper = await paperDir(vault, body.ref)
   if (!paper.ok) return paper
   const quote = body.quote.trim()
-  if (quote === '' || body.rects.length === 0 || body.page < 1) {
+  if ((quote === '' && body.kind !== 'visual') || body.rects.length === 0 || body.page < 1) {
     return { ok: false, status: 400, error: 'invalid body' }
   }
   const dir = path.join(paper.dir.real, 'marks')
@@ -335,6 +346,54 @@ export async function writeMark(vault: string, body: MarkWrite): Promise<MarksWr
   const width = body.pageSize.width
   const height = body.pageSize.height
   if (!(width > 0) || !(height > 0)) return { ok: false, status: 400, error: 'invalid body' }
+  const geometry = body.rects.map(rect => ({
+    x: clamp01(rect.x / width),
+    y: clamp01(rect.y / height),
+    w: clamp01(rect.w / width),
+    h: clamp01(rect.h / height),
+  }))
+
+  if (body.kind === 'visual') {
+    const asset = body.asset
+    if (asset === undefined || asset.mediaType !== 'image/png') {
+      return { ok: false, status: 400, error: 'invalid body' }
+    }
+    const encoded = asset.data.replace(/\s+/g, '')
+    if (encoded === '' || encoded.length > 6_000_000) {
+      return { ok: false, status: 400, error: 'invalid body' }
+    }
+    const png = Buffer.from(encoded, 'base64')
+    if (png.length === 0 || png.length > 4_500_000) {
+      return { ok: false, status: 400, error: 'invalid body' }
+    }
+    const id = newMarkId()
+    const assetDir = path.join(dir, 'assets')
+    const relative = `marks/assets/${id}.png`
+    const comment = body.comment?.trim() ?? ''
+    const mark = {
+      version: 2,
+      kind: 'visual',
+      id,
+      paperPath: paper.dir.relative,
+      createdAt: now,
+      updatedAt: now,
+      status: 'open',
+      geometry: 'resolved',
+      asset: relative,
+      ...(comment === '' ? {} : { comment }),
+      anchor: {
+        page: body.page,
+        rects: geometry,
+        quote: comment,
+        trigger: 'region',
+      },
+    }
+    await mkdir(assetDir, { recursive: true })
+    await writeFile(path.join(assetDir, `${id}.png`), png)
+    await writeFile(path.join(dir, `${id}.json`), `${JSON.stringify(mark, null, 2)}\n`, 'utf8')
+    return { ok: true, ids: [id], path: `${paper.dir.relative}/marks/${id}.json` }
+  }
+
   const id = newMarkId()
   const question = (body.question ?? body.comment ?? '').trim()
   const mark = {
@@ -348,12 +407,7 @@ export async function writeMark(vault: string, body: MarkWrite): Promise<MarksWr
     geometry: 'resolved',
     anchor: {
       page: body.page,
-      rects: body.rects.map(rect => ({
-        x: clamp01(rect.x / width),
-        y: clamp01(rect.y / height),
-        w: clamp01(rect.w / width),
-        h: clamp01(rect.h / height),
-      })),
+      rects: geometry,
       quote,
       trigger: 'selection',
     },

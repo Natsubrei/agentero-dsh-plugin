@@ -6,6 +6,10 @@ export type PdfReadResult =
   | { status: 200, bytes: Buffer }
   | { status: 400 | 404, error: string }
 
+export type PdfPathResult =
+  | { status: 200, realPath: string }
+  | { status: 400 | 404, error: string }
+
 function ioCode(error: unknown): string | undefined {
   if (typeof error !== 'object' || error === null || !('code' in error)) return undefined
   return typeof error.code === 'string' ? error.code : undefined
@@ -18,12 +22,12 @@ async function readRegularFile(realPath: string): Promise<PdfReadResult> {
 }
 
 /**
- * Read one PDF.
+ * Resolve one PDF on disk.
  * A `ref` ending in `.pdf` is that file.
  * Any other ref is a paper directory: prefer `<dirname>.pdf`, else the first
  * direct-child `.pdf` in locale order. Nested directories are not searched.
  */
-export async function readVaultPdf(vault: string, rawRef: string): Promise<PdfReadResult> {
+export async function locateVaultPdf(vault: string, rawRef: string): Promise<PdfPathResult> {
   const located = await locateVaultPath(vault, rawRef)
   if (!located.ok) return { status: located.status, error: located.error }
   const { root, relative, lexical } = located.location
@@ -42,7 +46,7 @@ export async function readVaultPdf(vault: string, rawRef: string): Promise<PdfRe
     if (relativeToRoot.startsWith('..') || path.isAbsolute(relativeToRoot)) {
       return { status: 400, error: 'invalid path' }
     }
-    return readRegularFile(real)
+    return { status: 200, realPath: real }
   }
 
   let dirReal: string
@@ -70,5 +74,12 @@ export async function readVaultPdf(vault: string, rawRef: string): Promise<PdfRe
   const preferred = `${path.posix.basename(relative)}.pdf`
   const name = pdfs.find(item => item === preferred) ?? pdfs[0]
   if (name === undefined) return { status: 404, error: 'not found' }
-  return readRegularFile(path.join(dirReal, name))
+  return { status: 200, realPath: path.join(dirReal, name) }
+}
+
+/** Read one PDF. A `ref` ending in `.pdf` is that file; any other ref is a paper directory. */
+export async function readVaultPdf(vault: string, rawRef: string): Promise<PdfReadResult> {
+  const located = await locateVaultPdf(vault, rawRef)
+  if (located.status !== 200) return located
+  return readRegularFile(located.realPath)
 }

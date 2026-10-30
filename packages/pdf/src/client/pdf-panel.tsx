@@ -2,6 +2,7 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { cn } from './cn'
 import { EmbedReader, type SelectionHit } from './embed-reader'
+import type { EditableBookmark } from './bookmark'
 import { type PdfPaperTone } from './page-theme'
 import { DEFAULT_HIGHLIGHT_COLOR, type HighlightColor } from './palette'
 import { PDF_FLOAT_CARD } from './pdf-chrome-surface'
@@ -23,6 +24,8 @@ export interface PaintMark {
   note: string
   /** Highlight palette key, when the store carries one. */
   color?: HighlightColor
+  /** Vault-relative PNG for a visual region mark. */
+  asset?: string
 }
 
 /** Page rectangle in PDF points, the shape the selection plugin reports. */
@@ -38,7 +41,7 @@ export interface PdfPageSize {
 
 export interface MarkAdd {
   ref: string
-  kind: 'highlight' | 'ask' | 'translate'
+  kind: 'highlight' | 'ask' | 'translate' | 'visual'
   quote: string
   page: number
   /** Page-point selection rectangles; lets the host write without the CLI. */
@@ -47,6 +50,8 @@ export interface MarkAdd {
   color?: HighlightColor
   comment?: string
   question?: string
+  /** Visual region crop (bare base64 PNG), stored under marks/assets. */
+  asset?: { mediaType: string, data: string }
 }
 
 export interface PdfInjected {
@@ -54,6 +59,10 @@ export interface PdfInjected {
   loadMarks: (ref: string) => Promise<PaintMark[]>
   addMark: (body: MarkAdd) => Promise<string | undefined>
   cite: (sessionId: string, text: string) => Promise<void>
+  /** Write the PDF outline back to the file; resolves after the host saved it. */
+  saveBookmarks: (ref: string, nodes: EditableBookmark[]) => Promise<void>
+  /** Translate one page's text; rejects with the host error message. */
+  translate: (text: string) => Promise<string>
 }
 
 type PdfPanelProps =
@@ -104,7 +113,7 @@ export function PdfTitle({ useTabInfo, t }: PropsRuntime<'sidebar.right.pane.tab
 }
 
 export function PdfPanel(props: PdfPanelProps): ReactNode {
-  const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, cite } = props
+  const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, cite, saveBookmarks, translate } = props
   const paperPath = paperRef(useTabInfo().tab.navigation.params)
   const [status, setStatus] = useState<'empty' | 'loading' | 'missing' | 'error' | 'ready'>('empty')
   const [message, setMessage] = useState('')
@@ -169,6 +178,24 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     if (paperPath === '') return
     void loadMarks(paperPath).then(setMarks).catch(() => { setBanner(t('markFailed')) })
   }
+
+  const saveVisual = useCallback(async (input: {
+    page: number
+    rects: PdfRect[]
+    pageSize: PdfPageSize
+    asset: { mediaType: string, data: string }
+  }): Promise<void> => {
+    await addMark({
+      ref: paperPath,
+      kind: 'visual',
+      quote: '',
+      page: input.page,
+      rects: input.rects,
+      pageSize: input.pageSize,
+      asset: input.asset,
+    })
+    refreshMarks()
+  }, [paperPath, addMark, loadMarks, t])
 
   const runMark = (body: MarkAdd): void => {
     setBusy(true)
@@ -303,6 +330,9 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
               pdfTone={pdfTone}
               onSetPdfTone={setPdfTone}
               onSelect={onSelect}
+              saveBookmarks={(nodes) => saveBookmarks(paperPath, nodes)}
+              saveVisual={saveVisual}
+              translate={translate}
               menu={selectionMenu}
               t={t}
             />
