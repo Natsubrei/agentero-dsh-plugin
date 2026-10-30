@@ -10,6 +10,7 @@ import {
   changeTag, deletePaper, discoverArxiv, downloadPaper, exportBib, importBib, importId, setRead,
 } from './catalog.js'
 import { listVaultNotes, readVaultFile, writeVaultNote } from './notes-files.js'
+import { type MarkRect, readMarks, writeMark } from './marks-store.js'
 import { readVaultPdf } from './pdf-file.js'
 import { handleRecommendRequest } from './recommend.js'
 import { registerTools } from './tools.js'
@@ -376,9 +377,40 @@ interface MarkAddBody {
   kind: 'highlight' | 'ask' | 'translate'
   quote: string
   page: number
+  rects?: MarkRect[]
+  pageSize?: { width: number, height: number }
+  color?: string
   comment?: string
   question?: string
   to?: string
+}
+
+function markRects(value: unknown): MarkRect[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined
+  const rects: MarkRect[] = []
+  for (const item of value) {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) return undefined
+    const record = item as Record<string, unknown>
+    const { x, y, w, h } = record
+    if (typeof x !== 'number' || typeof y !== 'number') return undefined
+    if (typeof w !== 'number' || typeof h !== 'number') return undefined
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return undefined
+    if (!Number.isFinite(w) || !Number.isFinite(h)) return undefined
+    if (w <= 0 || h <= 0) return undefined
+    rects.push({ x, y, w, h })
+  }
+  return rects
+}
+
+function markPageSize(value: unknown): { width: number, height: number } | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const width = record.width
+  const height = record.height
+  if (typeof width !== 'number' || typeof height !== 'number') return undefined
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return undefined
+  if (!(width > 0) || !(height > 0)) return undefined
+  return { width, height }
 }
 
 function markAddFrom(raw: string): MarkAddBody | undefined {
@@ -397,6 +429,11 @@ function markAddFrom(raw: string): MarkAddBody | undefined {
     if (typeof record.comment === 'string' && record.comment.trim() !== '') body.comment = record.comment
     if (typeof record.question === 'string' && record.question.trim() !== '') body.question = record.question
     if (typeof record.to === 'string' && record.to.trim() !== '') body.to = record.to.trim()
+    if (typeof record.color === 'string' && record.color.trim() !== '') body.color = record.color.trim()
+    const rects = markRects(record.rects)
+    if (rects !== undefined) body.rects = rects
+    const pageSize = markPageSize(record.pageSize)
+    if (pageSize !== undefined) body.pageSize = pageSize
     return body
   } catch {
     return undefined
@@ -440,12 +477,12 @@ async function handleMarks(
       sendJson(res, 400, { error: 'invalid path' })
       return
     }
-    const result = await runAgentero(settings.agenteroBin, [
-      '--vault', settings.vault,
-      '--json',
-      'mark', 'list', ref,
-    ], PAPER_LIST_TIMEOUT_MS, children)
-    await finishCliJson(res, result, 'agentero mark list')
+    const result = await readMarks(settings.vault, ref.trim())
+    if (!result.ok) {
+      sendJson(res, result.status, { error: result.error })
+      return
+    }
+    sendJson(res, 200, { paperPath: result.paperPath, marks: result.marks })
     return
   }
   const raw = await readTextBody(req)
@@ -459,6 +496,28 @@ async function handleMarks(
     sendJson(res, 400, { error: 'invalid body' })
     return
   }
+  // A browser selection already knows its page rectangles, so the mark is
+  // written here instead of re-locating the quote through the CLI. Translation
+  // still needs the CLI's machine-translation engines.
+  if (body.kind !== 'translate' && body.rects !== undefined && body.pageSize !== undefined) {
+    const written = await writeMark(settings.vault, {
+      ref: body.ref,
+      kind: body.kind,
+      quote: body.quote,
+      page: body.page,
+      rects: body.rects,
+      pageSize: body.pageSize,
+      ...(body.color === undefined ? {} : { color: body.color }),
+      ...(body.comment === undefined ? {} : { comment: body.comment }),
+      ...(body.question === undefined ? {} : { question: body.question }),
+    })
+    if (!written.ok) {
+      sendJson(res, written.status, { error: written.error })
+      return
+    }
+    sendJson(res, 200, { ok: true, ids: written.ids, path: written.path })
+    return
+  }
   const args = [
     '--vault', settings.vault,
     '--json',
@@ -467,6 +526,7 @@ async function handleMarks(
     '--quote', body.quote,
     '--page', String(body.page),
   ]
+  if (body.color !== undefined) args.push('--mark-color', body.color)
   if (body.comment !== undefined) args.push('--comment', body.comment)
   if (body.question !== undefined) args.push('--question', body.question)
   if (body.to !== undefined) args.push('--to', body.to)

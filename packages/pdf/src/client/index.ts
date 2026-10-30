@@ -4,6 +4,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { en, zh } from './locale'
+import { normalizeHighlightColor } from './palette'
 import { PdfPanel, PdfTitle, type PaintMark, type PdfInjected } from './pdf-panel'
 
 /** Right-sidebar tab identity. The body registers under this key. */
@@ -61,22 +62,7 @@ function envelopeData(body: unknown): Record<string, unknown> | undefined {
   return recordOf(record.data) ?? record
 }
 
-function pointRect(value: unknown): { x: number, y: number, w: number, h: number } | undefined {
-  const record = recordOf(value)
-  if (record === undefined) return undefined
-  const origin = recordOf(record.origin)
-  const size = recordOf(record.size)
-  if (origin === undefined || size === undefined) return undefined
-  const x = origin.x
-  const y = origin.y
-  const w = size.width
-  const h = size.height
-  if (typeof x !== 'number' || typeof y !== 'number' || typeof w !== 'number' || typeof h !== 'number') return undefined
-  if (w <= 0 || h <= 0) return undefined
-  return { x, y, w, h }
-}
-
-function normRect(value: unknown): { x: number, y: number, w: number, h: number } | undefined {
+function markRect(value: unknown): { x: number, y: number, w: number, h: number } | undefined {
   const record = recordOf(value)
   if (record === undefined) return undefined
   const { x, y, w, h } = record
@@ -85,67 +71,24 @@ function normRect(value: unknown): { x: number, y: number, w: number, h: number 
   return { x, y, w, h }
 }
 
-function paintFromAnnotation(item: unknown): PaintMark | undefined {
-  const record = recordOf(item)
-  const annotation = recordOf(record?.annotation) ?? record
-  if (annotation === undefined) return undefined
-  const id = typeof annotation.id === 'string' ? annotation.id : ''
-  if (id === '') return undefined
-  const pageIndex = annotation.pageIndex
-  const page = typeof pageIndex === 'number' ? pageIndex + 1 : 0
-  if (page < 1) return undefined
-  const rawRects = Array.isArray(annotation.segmentRects) ? annotation.segmentRects : [annotation.rect]
-  const rects = rawRects.map(pointRect).filter((rect): rect is { x: number, y: number, w: number, h: number } => rect !== undefined)
-  const custom = recordOf(annotation.custom)
-  const quote = typeof custom?.quote === 'string' ? custom.quote : ''
-  const contents = typeof annotation.contents === 'string' ? annotation.contents : ''
-  return { id, kind: 'highlight', page, rects, space: 'pt', note: contents || quote }
-}
-
-function paintFromMark(item: unknown): PaintMark | undefined {
-  const record = recordOf(item)
+/** One mark as the host reads it off disk (`/agentero/api/marks`). */
+function markFromWire(value: unknown): PaintMark | undefined {
+  const record = recordOf(value)
   if (record === undefined) return undefined
-  if (record.annotation !== undefined) return paintFromAnnotation(record)
   const id = typeof record.id === 'string' ? record.id : ''
   const kind = typeof record.kind === 'string' ? record.kind : ''
-  if (id === '' || kind === '') return undefined
-  const anchor = recordOf(record.anchor)
-  const pageValue = record.page ?? anchor?.page
-  const page = typeof pageValue === 'number' ? pageValue : 0
-  if (page < 1) return undefined
-  const rawRects = Array.isArray(record.rects) ? record.rects : anchor?.rects
-  const rects = Array.isArray(rawRects)
-    ? rawRects.map(normRect).filter((rect): rect is { x: number, y: number, w: number, h: number } => rect !== undefined)
-    : []
-  const result = typeof record.result === 'string' ? record.result : ''
-  const comment = typeof record.comment === 'string' ? record.comment : ''
-  return { id, kind, page, rects, space: 'norm', note: result || comment }
-}
-
-function marksFromFile(text: string): PaintMark[] {
-  try {
-    const parsed: unknown = JSON.parse(text)
-    if (Array.isArray(parsed)) {
-      return parsed.map(paintFromAnnotation).filter((mark): mark is PaintMark => mark !== undefined)
-    }
-    const one = paintFromMark(parsed)
-    return one === undefined ? [] : [one]
-  } catch {
-    return []
-  }
-}
-
-function listPaths(body: unknown): string[] {
-  const data = envelopeData(body)
-  const items = data?.items
-  if (!Array.isArray(items)) return []
-  const paths: string[] = []
-  for (const item of items) {
-    const record = recordOf(item)
-    const path = record?.path
-    if (typeof path === 'string' && path !== '' && !paths.includes(path)) paths.push(path)
-  }
-  return paths
+  const page = typeof record.page === 'number' ? record.page : 0
+  if (id === '' || kind === '' || page < 1) return undefined
+  const rawRects = Array.isArray(record.rects) ? record.rects : []
+  const rects = rawRects
+    .map(markRect)
+    .filter((rect): rect is { x: number, y: number, w: number, h: number } => rect !== undefined)
+  const note = typeof record.note === 'string' ? record.note : ''
+  const space = record.space === 'pt' ? 'pt' : 'norm'
+  const color = kind === 'highlight' && typeof record.color === 'string'
+    ? normalizeHighlightColor(record.color)
+    : undefined
+  return { id, kind, page, rects, space, note, ...(color === undefined ? {} : { color }) }
 }
 
 function translationOf(body: unknown): string | undefined {
@@ -196,22 +139,11 @@ export function apply(ctx: Context): void {
       const response = await fetch(`/agentero/api/marks?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
       const body = await parseBody(response)
       if (!response.ok) throw new Error(errorText(body) ?? '')
-      const paths = listPaths(body)
-      const marks: PaintMark[] = []
-      const seen = new Set<string>()
-      for (const path of paths) {
-        const file = await fetch(`/agentero/api/notes/file?path=${encodeURIComponent(path)}`, { cache: 'no-store' })
-        const parsed = await parseBody(file)
-        if (!file.ok) continue
-        const record = recordOf(parsed)
-        const text = typeof record?.text === 'string' ? record.text : ''
-        for (const mark of marksFromFile(text)) {
-          if (seen.has(mark.id)) continue
-          seen.add(mark.id)
-          marks.push(mark)
-        }
-      }
-      return marks
+      const data = envelopeData(body)
+      const items = Array.isArray(data?.marks) ? data.marks : []
+      return items
+        .map(markFromWire)
+        .filter((mark): mark is PaintMark => mark !== undefined)
     },
     async addMark(body) {
       const response = await fetch('/agentero/api/marks', {

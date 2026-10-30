@@ -42,7 +42,8 @@ import {
   type PdfPaperTone,
 } from './page-theme'
 import { PdfBottomBar } from './pdf-bottom-bar'
-import type { PaintMark } from './pdf-panel'
+import { DEFAULT_HIGHLIGHT_COLOR, highlightFill } from './palette'
+import type { PaintMark, PdfRect } from './pdf-panel'
 import { PDF_ZOOM_MAX, PDF_ZOOM_MIN } from './zoom'
 
 /** Marks a rendered page so the selection menu can map page points to the screen. */
@@ -53,6 +54,11 @@ type PdfT = PropsLocale<'agentero.pdf'>['t']
 export interface SelectionHit {
   quote: string
   page: number
+  /** Page-point rectangles from the live selection. */
+  rects: PdfRect[]
+  /** Page size at scale 1, for normalizing per-id mark anchors. */
+  pageWidth: number
+  pageHeight: number
   screenX: number
   screenY: number
 }
@@ -158,6 +164,9 @@ function ReaderChrome(props: EmbedReaderProps): ReactNode {
   const zoomLevel = zoom.state.currentZoomLevel
   const zoomRef = useRef(zoomLevel)
   zoomRef.current = zoomLevel
+  const documentState = useDocumentState(docId)
+  const documentStateRef = useRef(documentState)
+  documentStateRef.current = documentState
 
   useEffect(() => {
     if (pageFocusedRef.current) return
@@ -182,10 +191,20 @@ function ReaderChrome(props: EmbedReaderProps): ReactNode {
         screenY = box.top + anchor.rect.origin.y * scale
       }
       const pageNumber = anchor.pageIndex + 1
+      const rects: PdfRect[] = anchor.segmentRects.length > 0 ? anchor.segmentRects : [anchor.rect]
+      const size = documentStateRef.current?.document?.pages[anchor.pageIndex]?.size
       void selection.getSelectedText(docId).toPromise().then((lines) => {
         const quote = (lines ?? []).join(' ').replace(/\s+/g, ' ').trim()
         if (quote === '') return
-        onSelect({ quote, page: pageNumber, screenX, screenY })
+        onSelect({
+          quote,
+          page: pageNumber,
+          rects,
+          pageWidth: size !== undefined && size.width > 0 ? size.width : 0,
+          pageHeight: size !== undefined && size.height > 0 ? size.height : 0,
+          screenX,
+          screenY,
+        })
       }).catch(() => undefined)
     })
   }, [selection, docId, onSelect])
@@ -267,7 +286,7 @@ function PdfPage(props: {
       ? 'rgba(80, 140, 255, 0.28)'
       : mark.kind === 'ask'
         ? 'rgba(80, 180, 120, 0.28)'
-        : 'rgba(240, 200, 40, 0.35)'
+        : highlightFill(mark.color ?? DEFAULT_HIGHLIGHT_COLOR)
     return (
       <div
         key={`${mark.id}:${index}`}

@@ -39,7 +39,7 @@ function vaultRelative(input: string): string | undefined {
   return segments.join('/')
 }
 
-function within(parent: string, child: string, allowEqual: boolean): boolean {
+export function within(parent: string, child: string, allowEqual: boolean): boolean {
   const relative = path.relative(parent, child)
   if (relative === '') return allowEqual
   if (path.isAbsolute(relative)) return false

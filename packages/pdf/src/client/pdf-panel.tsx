@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { cn } from './cn'
 import { EmbedReader, type SelectionHit } from './embed-reader'
 import { type PdfPaperTone } from './page-theme'
+import { DEFAULT_HIGHLIGHT_COLOR, type HighlightColor } from './palette'
 import { PDF_FLOAT_CARD } from './pdf-chrome-surface'
 import { SelectionMenu } from './selection-menu'
 
@@ -20,6 +21,19 @@ export interface PaintMark {
   rects: PaintRect[]
   space: 'norm' | 'pt'
   note: string
+  /** Highlight palette key, when the store carries one. */
+  color?: HighlightColor
+}
+
+/** Page rectangle in PDF points, the shape the selection plugin reports. */
+export interface PdfRect {
+  origin: { x: number, y: number }
+  size: { width: number, height: number }
+}
+
+export interface PdfPageSize {
+  width: number
+  height: number
 }
 
 export interface MarkAdd {
@@ -27,6 +41,10 @@ export interface MarkAdd {
   kind: 'highlight' | 'ask' | 'translate'
   quote: string
   page: number
+  /** Page-point selection rectangles; lets the host write without the CLI. */
+  rects?: PdfRect[]
+  pageSize?: PdfPageSize
+  color?: HighlightColor
   comment?: string
   question?: string
 }
@@ -46,6 +64,10 @@ type PdfPanelProps =
 interface MenuState {
   quote: string
   page: number
+  /** Selection geometry, so the mark is written without a quote lookup. */
+  rects: PdfRect[]
+  pageSize: PdfPageSize
+  color: HighlightColor
   screenX: number
   screenY: number
   mode: 'actions' | 'comment' | 'ask'
@@ -99,6 +121,9 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     setMenu({
       quote: hit.quote,
       page: hit.page,
+      rects: hit.rects,
+      pageSize: { width: hit.pageWidth, height: hit.pageHeight },
+      color: DEFAULT_HIGHLIGHT_COLOR,
       screenX: hit.screenX,
       screenY: hit.screenY,
       mode: 'actions',
@@ -178,10 +203,18 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     if (menu === undefined) return
     const quote = menu.quote
     const pageNumber = menu.page
+    const geometry = { rects: menu.rects, pageSize: menu.pageSize }
     if (menu.mode === 'ask') {
       setMenu(undefined)
       setBusy(true)
-      void addMark({ ref: paperPath, kind: 'ask', quote, page: pageNumber, question: draft }).then(async () => {
+      void addMark({
+        ref: paperPath,
+        kind: 'ask',
+        quote,
+        page: pageNumber,
+        ...geometry,
+        question: draft,
+      }).then(async () => {
         if (sessionId === undefined) {
           setBanner(t('noSession'))
           refreshMarks()
@@ -194,7 +227,15 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
       }).finally(() => { setBusy(false) })
       return
     }
-    runMark({ ref: paperPath, kind: 'highlight', quote, page: pageNumber, comment: draft })
+    runMark({
+      ref: paperPath,
+      kind: 'highlight',
+      quote,
+      page: pageNumber,
+      ...geometry,
+      color: menu.color,
+      comment: draft,
+    })
   }
 
   const selectionMenu = menu === undefined ? null : (
@@ -212,12 +253,28 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
           return false
         }
       }}
-      onHighlight={() => {
-        runMark({ ref: paperPath, kind: 'highlight', quote: menu.quote, page: menu.page })
+      onHighlight={(color) => {
+        setMenu({ ...menu, color })
+        runMark({
+          ref: paperPath,
+          kind: 'highlight',
+          quote: menu.quote,
+          page: menu.page,
+          rects: menu.rects,
+          pageSize: menu.pageSize,
+          color,
+        })
       }}
       onComment={() => { setMenu({ ...menu, mode: 'comment' }) }}
       onTranslate={() => {
-        runMark({ ref: paperPath, kind: 'translate', quote: menu.quote, page: menu.page })
+        runMark({
+          ref: paperPath,
+          kind: 'translate',
+          quote: menu.quote,
+          page: menu.page,
+          rects: menu.rects,
+          pageSize: menu.pageSize,
+        })
       }}
       onCite={() => { citeQuote() }}
       onAsk={() => { setMenu({ ...menu, mode: 'ask' }) }}

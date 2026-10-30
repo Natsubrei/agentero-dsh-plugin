@@ -273,7 +273,8 @@ Host 路由（`packages/host/src/recommend.ts`）：
 - 阅读引擎是 EmbedPDF / PDFium，和桌面端同一套：先 worker，失败再 direct。`fontFallback` 为 `null`（桌面端的 CJK 回退走 Tauri）。wasm 从 `GET /agentero/api/pdfium.wasm` 取，绝对 URL 交给 worker。插件注册沿用文档、视口、单页 spread、纵向滚动、渲染、分块、适应宽度缩放、交互和文本选择。底栏、划词菜单、批注卡片和纸色仍用原来的界面。
 - 还没有路径时显示「从文献库打开一篇论文」。
 - 声明 child `agentero.pdf.notes`。槽里没有内容时 PDF 占满宽度。
-- 划词菜单：复制、高亮、批注、翻译、加入对话、快速对话。选区来自 EmbedPDF selection。高亮和批注走 `POST /agentero/api/marks`（`agentero mark add --quote --page`）。高亮矩形来自 `marks/annotations.json` 的页点坐标，再用页面 `size` 换回 0–1。翻译和提问的矩形是标注文件里的 0–1。
+- 划词菜单：复制、高亮、批注、翻译、加入对话、快速对话。选区来自 EmbedPDF selection，`getFormattedSelection` 顺带给出页点矩形，随 `POST /agentero/api/marks` 一起提交，所以高亮、批注和 ask 不再依赖 `agentero mark add` 重新定位引文。高亮写进 `marks/annotations.json`（EmbedPDF transfer 形状，2 空格 JSON + 尾换行、按 id 去重、原子替换），ask 写 `marks/<id>.json`，矩形按页面尺寸归一化成 0–1。翻译仍走 CLI，机器翻译引擎只在那边。
+- 读标注走 `GET /agentero/api/marks?ref=`：Host 直接读 `marks/annotations.json` 和 `marks/*.json`，不再 `spawn agentero mark list`，也不再逐文件再发 `notes/file`。高亮颜色从 `custom.paletteKey` 读回并用于绘制。
 - 加入对话使用这一页的 `sessionId`，`POST /agentero/api/context`。对话留在中间，不切换主面板。没有会话时在面板里提示。这条消息进模型上下文，不自动唤醒会话。
 
 ### 论文笔记槽

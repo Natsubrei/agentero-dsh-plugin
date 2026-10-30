@@ -20,6 +20,7 @@ import {
 	HighlightColorStack,
 } from "./highlight-color-stack";
 import { cn } from "./cn";
+import type { HighlightColor } from "./palette";
 
 type PdfT = PropsLocale<"agentero.pdf">["t"];
 
@@ -31,8 +32,8 @@ type SelectionMenuProps = {
 	busy: boolean;
 	t: PdfT;
 	onCopy: () => Promise<boolean>;
-	/** Every swatch calls this. The mark API has no color field. */
-	onHighlight: () => void;
+	/** Every swatch calls this with the chosen palette key. */
+	onHighlight: (color: HighlightColor) => void;
 	onComment: () => void;
 	onTranslate: () => void;
 	onCite: () => void;
@@ -223,8 +224,8 @@ export function SelectionMenu({
 					<HighlightColorStack
 						ref={colorsRef}
 						t={t}
-						onSelect={() => {
-							if (!busy) onHighlight();
+						onSelect={(color) => {
+							if (!busy) onHighlight(color);
 						}}
 					/>
 					<div ref={dividerRef} className="mx-0.5 h-4 w-px shrink-0 bg-border" />
