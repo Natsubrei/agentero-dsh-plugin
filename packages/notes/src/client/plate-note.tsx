@@ -81,11 +81,15 @@ function findMatches(editor: PlateEditor, search: string): TRange[] {
 export function PlateNote({
   markdown,
   placeholder,
+  trailing,
+  aside,
   onMarkdown,
   t,
 }: {
   markdown: string
   placeholder?: string
+  trailing?: ReactNode
+  aside?: ReactNode
   onMarkdown: (value: string) => void
   t: NotesT
 }): ReactNode {
@@ -111,7 +115,14 @@ export function PlateNote({
         onMarkdown(next)
       }}
     >
-      <NoteSurface findOpen={findOpen} placeholder={placeholder} t={t} onFind={setFindOpen} />
+      <NoteSurface
+        findOpen={findOpen}
+        placeholder={placeholder}
+        trailing={trailing}
+        aside={aside}
+        t={t}
+        onFind={setFindOpen}
+      />
     </Plate>
   )
 }
@@ -119,41 +130,51 @@ export function PlateNote({
 function NoteSurface({
   findOpen,
   placeholder,
+  trailing,
+  aside,
   t,
   onFind,
 }: {
   findOpen: boolean
   placeholder?: string
+  trailing?: ReactNode
+  aside?: ReactNode
   t: NotesT
   onFind: (open: boolean) => void
 }): ReactNode {
-  const [focused, setFocused] = useState(false)
   return (
-    <div className="@container/editor relative min-h-0 flex-1" style={editorTextStyle}>
-      <PlateContent
-        className={`${editorContainerClassName} ${editorClassName} ${editorContentClassName}`}
-        placeholder={placeholder}
-        onFocus={() => { setFocused(true) }}
-        onBlur={(event) => {
-          const next = event.relatedTarget
-          if (next instanceof Node && event.currentTarget.parentElement?.contains(next)) return
-          setFocused(false)
-        }}
-        onKeyDown={(event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
-            event.preventDefault()
-            onFind(true)
-          }
-          if (event.key === 'Escape') onFind(false)
-        }}
-      />
-      {focused ? <NoteFormatBar t={t} onFind={() => { onFind(true) }} /> : null}
-      {findOpen ? <FindBar t={t} onClose={() => { onFind(false) }} /> : null}
+    <div className="@container/editor relative flex min-h-0 flex-1 flex-col" style={editorTextStyle}>
+      <NoteFormatBar trailing={trailing} t={t} onFind={() => { onFind(true) }} />
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {findOpen ? <FindBar t={t} onClose={() => { onFind(false) }} /> : null}
+          <PlateContent
+            className={`${editorContainerClassName} ${editorClassName} ${editorContentClassName} min-h-0 flex-1 h-auto!`}
+            placeholder={placeholder}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+                event.preventDefault()
+                onFind(true)
+              }
+              if (event.key === 'Escape') onFind(false)
+            }}
+          />
+        </div>
+        {aside}
+      </div>
     </div>
   )
 }
 
-function NoteFormatBar({ t, onFind }: { t: NotesT, onFind: () => void }): ReactNode {
+function NoteFormatBar({
+  trailing,
+  t,
+  onFind,
+}: {
+  trailing?: ReactNode
+  t: NotesT
+  onFind: () => void
+}): ReactNode {
   const editor = useEditorRef()
   const run = (apply: () => void): void => {
     editor.tf.focus()
@@ -161,9 +182,9 @@ function NoteFormatBar({ t, onFind }: { t: NotesT, onFind: () => void }): ReactN
   }
 
   return (
-    <div className="absolute inset-x-2 bottom-2 z-10">
+    <div className="flex shrink-0 items-center border-b border-border bg-background">
       <TooltipProvider>
-        <Toolbar className="flex flex-wrap items-center gap-0.5 rounded-md border border-border bg-background px-1 py-0.5 shadow-sm">
+        <Toolbar className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5 px-1 py-0.5">
               <FormatButton label={t('bold')} onClick={() => { run(() => { editor.tf.toggleMark(KEYS.bold) }) }}>
                 <Bold />
               </FormatButton>
@@ -211,6 +232,7 @@ function NoteFormatBar({ t, onFind }: { t: NotesT, onFind: () => void }): ReactN
               </FormatButton>
         </Toolbar>
       </TooltipProvider>
+      {trailing === undefined ? null : <div className="shrink-0 pe-1">{trailing}</div>}
     </div>
   )
 }
@@ -293,7 +315,7 @@ function FindBar({ t, onClose }: { t: NotesT, onClose: () => void }): ReactNode 
   }, [])
 
   return (
-    <div className="absolute end-3 top-2 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-1 rounded-md border border-border bg-background px-1.5 py-1 shadow-sm">
+    <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border bg-background px-2 py-1">
       <input
         data-note-find
         value={query}

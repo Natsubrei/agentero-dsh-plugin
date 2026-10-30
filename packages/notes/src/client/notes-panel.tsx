@@ -1,4 +1,5 @@
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { PanelRight, PanelRightClose } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAutosave } from './autosave'
 import { FileTree, FileTreeFile } from './file-tree'
@@ -41,6 +42,7 @@ export function NotesPanel({
 }: PropsRuntime<'sidebar.right.pane.tab'> & PropsLocale<'agentero.notes'> & NotesFace): ReactNode {
   const [list, setList] = useState<ListStatus>({ kind: 'loading' })
   const [selected, setSelected] = useState<string | undefined>(undefined)
+  const [listOpen, setListOpen] = useState(false)
   const [doc, setDoc] = useState<DocStatus>({ kind: 'idle' })
   const [writeError, setWriteError] = useState<string | undefined>(undefined)
   const ticket = useRef(0)
@@ -53,7 +55,9 @@ export function NotesPanel({
     setList({ kind: 'loading' })
     loadNotes()
       .then((notes) => {
-        if (!cancelled) setList({ kind: 'ready', notes })
+        if (cancelled) return
+        setList({ kind: 'ready', notes })
+        setSelected((current) => current ?? notes[0]?.path)
       })
       .catch((error: unknown) => {
         if (!cancelled) setList({ kind: 'error', message: messageOf(error) })
@@ -102,18 +106,30 @@ export function NotesPanel({
   }
 
   const notes = list.notes
-  const listPane = (
-    <FileTree
-      selectedPath={selected}
-      onSelect={setSelected}
-      className="flex h-full w-56 shrink-0 flex-col overflow-y-auto border-e border-border py-1"
+  const listToggle = (
+    <button
+      type="button"
+      aria-label={listOpen ? t('collapseList') : t('expandList')}
+      className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground"
+      onClick={() => { setListOpen((open) => !open) }}
     >
-      {notes.length === 0 ? (
-        <p className="px-4 py-2 text-muted-foreground text-sm">{t('empty')}</p>
-      ) : notes.map((note) => (
-        <FileTreeFile key={note.path} path={note.path} name={note.title} title={note.path} />
-      ))}
-    </FileTree>
+      {listOpen ? <PanelRightClose className="size-3.5" /> : <PanelRight className="size-3.5" />}
+    </button>
+  )
+  const listPane = (
+    <div className="flex h-full w-52 shrink-0 flex-col border-s border-border">
+      <FileTree
+        selectedPath={selected}
+        onSelect={setSelected}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto py-1"
+      >
+        {notes.length === 0 ? (
+          <p className="px-4 py-2 text-muted-foreground text-sm">{t('empty')}</p>
+        ) : notes.map((note) => (
+          <FileTreeFile key={note.path} path={note.path} name={note.title} title={note.path} />
+        ))}
+      </FileTree>
+    </div>
   )
 
   let reader: ReactNode
@@ -132,6 +148,8 @@ export function NotesPanel({
         <PlateNote
           key={doc.path}
           markdown={doc.text}
+          trailing={listToggle}
+          aside={listOpen ? listPane : null}
           onMarkdown={saveMarkdown}
           t={t}
         />
@@ -139,10 +157,21 @@ export function NotesPanel({
     )
   }
 
+  const fallback = (
+    <div className="flex min-h-0 min-w-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex h-8 shrink-0 items-center justify-end border-b border-border pe-1">{listToggle}</div>
+        {reader}
+      </div>
+      {listOpen ? listPane : null}
+    </div>
+  )
+
   return (
     <div className={ROOT}>
-      {listPane}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">{reader}</div>
+      {doc.kind === 'ready' ? (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{reader}</div>
+      ) : fallback}
     </div>
   )
 }
