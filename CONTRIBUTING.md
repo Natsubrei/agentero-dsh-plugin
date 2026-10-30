@@ -13,7 +13,7 @@ motif/
 ## 如何贡献
 
 1. 从 `main` 拉出功能分支。
-2. 在本地 profile 里确认插件能加载。
+2. 按下面的「体验」在 `web` profile 里确认插件能加载，并能打开一篇论文。
 3. 用 [Conventional Commits](https://www.conventionalcommits.org/) 写提交说明，例如 `feat: register the agentero tool`。一次提交只做一件事。
 4. 推送分支，打开 Pull Request，说明改了什么、如何验证。
 
@@ -37,62 +37,64 @@ motif/
 
 当前宿主源码版本见 `deepseek-harness/package.json`（检出时为 `0.2.2-alpha.2`）。本包用 `engines.dsh` 声明 `>=0.2.1-rc.5 <0.3.0`。DSH 仍在开发者预览，升级宿主后如果安装被拒绝，先收紧这个范围再重试。
 
-## 准备宿主
+## 体验
 
-宿主使用旁边的源码检出，不把插件写进 Harness 仓库。
+目录必须是上面的并列关系。插件的类型检查用相对路径读取旁边的 `deepseek-harness`。看文献和 PDF 还需要一份已经有论文的 Agentero Vault（含 `papers/` 和 `.agentero/catalog.sqlite`），以及本仓库上层 Motif 编出来的 `agentero-cli`。
+
+先构建宿主、插件和 CLI：
 
 ```sh
 cd motif/deepseek-harness
 corepack pnpm install
 corepack pnpm run build
+
+cd ../agentero-dsh-plugin
+corepack pnpm install
+
+cd ..
+cargo build -p agentero-cli
 ```
 
-`pnpm run build` 生成仓库产物。之后 `pnpm dsh` 直接使用这些产物。已经构建过就可以跳过。
+宿主的 `pnpm run build` 生成仓库产物，之后 `pnpm dsh` 直接使用这些产物。已经构建过就可以跳过。插件的 `prepare` 会构建四个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。需要单独重建时运行 `corepack pnpm build`；只做类型检查时运行 `corepack pnpm typecheck`。
 
-确认 CLI 能起来：
+四个包把 `@deepseek-ai/cordis` 放在 `peerDependencies`。根 `package.json` 用 `file:./packages/host` 等依赖这四个包名，方便 profile 安装时解析。
+
+装进 `dsh web` 启动的那个 profile。CLI 把第一个非选项词当成 profile 名：`dsh web` 就是 `--profile web`。不要再写一遍 `--profile`，否则会报 profile 选了两次。名为 `desktop` 的 profile 只给 Electron 用，CLI 不能启动它。
+
+```sh
+cd motif/deepseek-harness
+corepack pnpm dsh plugin --profile web add ../agentero-dsh-plugin
+corepack pnpm dsh web --dump-config
+```
+
+`--dump-config` 里应能看到 `# == agentero-dsh-plugin`，以及 `agentero-host`、`agentero-library`、`agentero-notes`、`agentero-pdf` 四行。
+
+Vault 和 CLI 路径写在本机 profile，不写进会提交的 `cordis.patch.yml`。编辑 `~/.dsh/profiles/web/cordis.patch.yml`（设置了 `DSH_HOME` 时是 `$DSH_HOME/profiles/web/cordis.patch.yml`）。后一层会整段替换目标行的 `config`，不会按键合并，所以两个字段写在一起：
+
+```yaml
+- id: agentero-host
+  config:
+    vault: /绝对路径/到/Vault
+    agenteroBin: /绝对路径/motif/target/debug/agentero-cli
+```
+
+`vault` 留空时，文献和 PDF 接口返回 503 `{ "error": "vault is not configured" }`。`agenteroBin` 也可以是 PATH 上的 `agentero`，写绝对路径更稳。
+
+启动：
 
 ```sh
 corepack pnpm dsh web --no-open
 ```
 
-默认地址是 `http://127.0.0.1:3080`。页面能打开后停掉这个进程。
-
-## 安装并构建插件
-
-```sh
-cd motif/agentero-dsh-plugin
-corepack pnpm install
-```
-
-`prepare` 会构建四个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。需要单独重建时运行 `corepack pnpm build`；只做类型检查时运行 `corepack pnpm typecheck`。类型检查通过旁边的 `deepseek-harness` 检出解析 Cordis 与 client 包的类型。
-
-四个包把 `@deepseek-ai/cordis` 放在 `peerDependencies`。根 `package.json` 用 `file:./packages/host` 等依赖这四个包名，方便 profile 安装时解析。
-
-## 链接到 profile
-
-在 Harness 根目录把本仓库链接进名为 `agentero` 的 profile。第一次会初始化 profile，并把本包追加进 `dsh.profile.bundles`。
-
-```sh
-cd motif/deepseek-harness
-corepack pnpm dsh plugin --profile agentero add ../agentero-dsh-plugin
-corepack pnpm dsh --profile agentero --dump-config
-```
-
-`--dump-config` 里应能看到 `# == agentero-dsh-plugin`，以及 `agentero-host`、`agentero-library`、`agentero-notes`、`agentero-pdf` 四行。然后启动 Web UI：
-
-```sh
-corepack pnpm dsh web --profile agentero --no-open
-```
-
-终端出现 `[agentero] plugin loaded` 即表示 host 入口已被加载。打开一个会话后，右栏开始页应有文献和笔记。PDF 从文献表打开。
+终端出现 `[agentero] plugin loaded` 后，用它打印的 `http://127.0.0.1:3080/?token=...` 打开。进入一个会话，右侧开始页有「文献」和「笔记」。点文献表里的一行打开 PDF。只看界面时不需要 DeepSeek API key。
 
 卸下插件：
 
 ```sh
-corepack pnpm dsh plugin --profile agentero remove agentero-dsh-plugin
+corepack pnpm dsh plugin --profile web remove agentero-dsh-plugin
 ```
 
-profile 数据在 `$DSH_HOME/profiles/agentero`（未设置 `DSH_HOME` 时是 `~/.dsh`）。这个目录不属于任何一个 Git 仓库。
+profile 目录不属于任何一个 Git 仓库。
 
 ## 插件在仓库里的形态
 
@@ -127,7 +129,7 @@ Host 的 Node 插件名是 `agentero-host`。它读取可选配置 `vault`（默
 
 1. 改对应包的 `packages/<name>/src/`。
 2. 在本仓库运行 `corepack pnpm build`。
-3. 重启 `corepack pnpm dsh web --profile agentero`。
+3. 重启 `corepack pnpm dsh web --no-open`。
 
 只改 profile 或 home 的 `cordis.patch.yml` 里已有行的 `config` 时，Cordis 会热替换该插件。组合包的安装和移除要重启进程后才生效。
 
@@ -143,7 +145,7 @@ Host 的 Node 插件名是 `agentero-host`。它读取可选配置 `vault`（默
 
 ```sh
 cd motif/deepseek-harness
-corepack pnpm dsh web --profile agentero --patch ../agentero-dsh-plugin/dev.patch.yml --no-open
+corepack pnpm dsh web --patch ../agentero-dsh-plugin/dev.patch.yml --no-open
 ```
 
 这条路径只用于冒烟。要安装、分发的仍然是声明了 `dsh.bundle` 的组合包。
@@ -153,7 +155,7 @@ corepack pnpm dsh web --profile agentero --patch ../agentero-dsh-plugin/dev.patc
 用户可以执行：
 
 ```sh
-dsh plugin --profile agentero add github:poco-ai/agentero-dsh-plugin
+dsh plugin --profile web add github:poco-ai/agentero-dsh-plugin
 ```
 
 Git 安装拿到的是源码。`prepare` 会在安装后编译 `lib/`。编译用相对路径读取旁边的 `deepseek-harness` 类型，没有这份检出时 `prepare` 会失败。pnpm 10 及以上默认不跑 Git 依赖的构建脚本，第一次 `add` 可能失败。按 CLI 提示把包名写入该 profile 的 `pnpm-workspace.yaml`：
