@@ -60,10 +60,13 @@ const SURFACE_CSS = `
   font: inherit;
   color: inherit;
   background-color: transparent;
-  border-style: solid;
 }
 .agentero-pdf button {
+  border-style: solid;
   cursor: pointer;
+}
+.agentero-pdf input {
+  border-width: 0;
 }
 `
 
