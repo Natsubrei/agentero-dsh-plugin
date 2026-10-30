@@ -1,6 +1,36 @@
 /* Agentero surface tokens for the dsh plugin. Utilities inherit these variables. */
 
 /*
+ * The host does not provide Tailwind Preflight. Keep the required control
+ * defaults inside plugin surfaces (including portals), below utility styles.
+ * Unlayered resets would override border/background/focus utilities.
+ */
+@layer base {
+	.agentero-surface,
+	.agentero-surface *,
+	.agentero-surface::before,
+	.agentero-surface::after,
+	.agentero-surface *::before,
+	.agentero-surface *::after {
+		box-sizing: border-box;
+		border: 0 solid;
+	}
+
+	.agentero-surface button,
+	.agentero-surface input,
+	.agentero-surface select,
+	.agentero-surface textarea,
+	.agentero-surface fieldset {
+		margin: 0;
+		padding: 0;
+		font: inherit;
+		letter-spacing: inherit;
+		color: inherit;
+		background-color: transparent;
+	}
+}
+
+/*
  * `dark:` utilities follow the same signal as the token blocks below: the
  * harness toggles `data-ds-dark-theme` on <body>. Tailwind's default dark
  * variant is `prefers-color-scheme`, which ignores the in-app theme and would

@@ -1,4 +1,5 @@
 /* scope: .agentero-library */
+@layer theme, base, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "../../../../styles/agentero-theme.css";
@@ -13,12 +14,6 @@
   font-weight: 400;
   --radius: 0.5rem;
   --radius-md: 0.4rem;
-}
-
-.agentero-library *,
-.agentero-library *::before,
-.agentero-library *::after {
-  box-sizing: border-box;
 }
 
 .agentero-library [data-library-scroll] {

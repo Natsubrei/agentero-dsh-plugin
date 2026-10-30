@@ -89,6 +89,18 @@ function scopeSelectors(css, scope) {
   let out = ''
   let i = 0
   while (i < css.length) {
+    // Preserve Tailwind's license banner and layer-order statements instead
+    // of treating them as selectors (which invalidates the following layer).
+    if (css.startsWith('/*', i)) {
+      const end = css.indexOf('*/', i + 2) + 2
+      out += css.slice(i, end)
+      i = end
+      continue
+    }
+    if (/\s/.test(css[i])) {
+      out += css[i++]
+      continue
+    }
     if (css.startsWith('@keyframes', i) || css.startsWith('@property', i) || css.startsWith('@font-face', i)) {
       const end = matchingBrace(css, css.indexOf('{', i)) + 1
       out += css.slice(i, end)
@@ -97,6 +109,12 @@ function scopeSelectors(css, scope) {
     }
     if (css[i] === '@') {
       const brace = css.indexOf('{', i)
+      const semicolon = css.indexOf(';', i)
+      if (semicolon !== -1 && (brace === -1 || semicolon < brace)) {
+        out += css.slice(i, semicolon + 1)
+        i = semicolon + 1
+        continue
+      }
       out += css.slice(i, brace + 1)
       const innerEnd = matchingBrace(css, brace)
       out += scopeSelectors(css.slice(brace + 1, innerEnd), scope)

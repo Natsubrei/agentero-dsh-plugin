@@ -1,17 +1,6 @@
 /* scope: .agentero-notes */
+@layer theme, base, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "../../../../styles/agentero-theme.css";
 @source "./";
-
-/* dsh leaves the native button border in place. Utilities sit in a layer, so
-   this unlayered rule is what actually clears the chrome. */
-.agentero-notes button {
-  border: 0;
-  background-color: transparent;
-  box-shadow: none;
-  color: inherit;
-}
-.agentero-notes button:hover {
-  background-color: var(--muted);
-}

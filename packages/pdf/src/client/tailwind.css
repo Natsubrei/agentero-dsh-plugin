@@ -1,8 +1,13 @@
 /* scope: .agentero-pdf */
+@layer theme, base, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "../../../../styles/agentero-theme.css";
 @source "./";
+
+.agentero-pdf button {
+	cursor: pointer;
+}
 
 /*
  * PDF bottom-bar zoom slider: muted gray at rest, brand accent on hover /

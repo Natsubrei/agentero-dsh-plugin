@@ -82,24 +82,6 @@ interface MenuState {
   mode: 'actions' | 'comment' | 'ask'
 }
 
-const SURFACE_CSS = `
-.agentero-pdf, .agentero-pdf *, .agentero-pdf *::before, .agentero-pdf *::after {
-  box-sizing: border-box;
-}
-.agentero-pdf button, .agentero-pdf input {
-  font: inherit;
-  color: inherit;
-  background-color: transparent;
-}
-.agentero-pdf button {
-  border-style: solid;
-  cursor: pointer;
-}
-.agentero-pdf input {
-  border-width: 0;
-}
-`
-
 export function paperRef(params: unknown): string {
   if (params === null || typeof params !== 'object' || !('ref' in params)) return ''
   const ref = params.ref
@@ -350,7 +332,6 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
 
   return (
     <div className="agentero-pdf agentero-surface flex h-full min-h-0 flex-col">
-      <style>{SURFACE_CSS}</style>
       {body}
     </div>
   )
