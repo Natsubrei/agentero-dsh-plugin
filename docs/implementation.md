@@ -138,6 +138,7 @@ corepack pnpm dsh web --profile agentero --no-open
 | T9 | 把插件装进 profile，配 Vault，用真实论文走通 | 已在 `web` profile 上走通文献列表、笔记渲染、PDF 翻页和论文笔记槽。标签增删已用接口验证并复原。BibTeX 导出和 arXiv 发现因 CLI 访问外网失败返回 502。卸插件和划词加入会话还没点 |
 | T10 | 版面侧栏、区域批注、全文翻译、书签写回、导出带批注 PDF | 未做，排在 T6 之后 |
 | T11 | Library 与 Agentero 桌面视觉对齐：紧凑表格、按需表单与标签编辑、菜单、错误 Toast | 已完成；在本机 DSH 验证搜索、空结果、排序、刷新保留滚动位置、菜单切换、标签输入焦点和已有 PDF 打开；本轮未执行导入、删除、标签写入等 Vault 数据变更 |
+| T12 | Library 选择知识库：原生选目录、手动路径、最近列表、持久化与旧来源保护 | 已实现；按用户要求不做额外验证 |
 
 ## 已实现的行为
 
@@ -145,12 +146,21 @@ corepack pnpm dsh web --profile agentero --no-open
 
 文件：`packages/host/src/index.ts`、`packages/host/src/notes-files.ts`。
 
-- `inject = ['webServer']`。
-- 配置对象手写解析，不用 schemastery。`@deepseek-ai/schemastery` 依赖 harness 里 `workspace:~` 的 `@deepseek-ai/cosmokit`，这个仓库装不进来。`vault` 默认 `""`，`agenteroBin` 默认 `"agentero"`。
+- `inject = ['webServer', 'agents', 'tools', 'settings']`；目录选择器通过可选的 `ctx.directoryPicker` 复用。
+- Host 导出 Harness 提供的 Schemastery `Config`，由 DSH 原生 settings 写入 profile；类型从旁边的 Harness 检出解析，不额外安装一份 schema 框架。`vault` 默认 `""`，`agenteroBin` 默认 `"agentero"`，`recentVaults` 默认 `[]`。
 - `ctx.webServer.register({ kind: 'prefix', path: '/agentero/api', handler })`，卸载时 dispose，并杀掉尚未退出的 `paper list` 子进程。
 - 请求的 `Host` 必须是 `127.0.0.1`、`localhost` 或 `::1`，否则 403，没有正文。
 - `vault === ""` 时业务路由返回 503 `{ "error": "vault is not configured" }`。
 - 未匹配的 pathname 返回 404。
+
+`GET /agentero/api/vault`、`PUT /agentero/api/vault`、`POST /agentero/api/vault/pick`
+
+- GET 返回当前知识库的 `path`、`name`、`scope`、最近 8 个目录，以及是否支持原生目录选择。选择器取消返回 `path: null`，不改变当前配置。
+- PUT 接收 `{ path }`，只接受绝对路径且必须是已有 Agentero Vault：包含 `.agentero/catalog.sqlite`，或同时包含 `.agentero/`、`papers/`、`notes/`。与 CLI 的识别规则一致；不会初始化普通目录。
+- 选择通过 DSH `settings.mutate('agentero-host', ...)` 一起保存 `vault` 与 `recentVaults`，保留 `agenteroBin` 和 profile 其它字段，重启后仍生效。当前作用域为整个 DSH profile，所有会话使用同一知识库。
+- 目录选择与切换要求 JSON 请求及同源 Origin；无原生选择器时仍可输入目录路径。
+- Host 浏览器服务提供 `getVault` 和带来源标识的 `request`。Library、Notes、PDF 的 IO 都通过该服务；`X-Agentero-Vault` 与当前来源不一致时返回 409，旧页面不会静默访问或写入新知识库。来源指纹用于一致性，不代替身份认证。PDFium WASM 不依赖知识库，仍可直接加载。
+- 确认切换前提示保存笔记；成功后重载页面，统一清除旧文献列表、PDF 缓冲和笔记编辑状态。其它旧页面必须刷新后继续操作。
 
 `GET /agentero/api/papers`
 
@@ -209,6 +219,7 @@ open(kind, id): boolean
 
 - `inject = ['slots', 'layout', 'locale']`。
 - 语言包 `agentero.library`，中文标题「文献」。
+- 顶部显示当前知识库名，点击可从最近列表切换、调用 DSH 原生文件夹选择器或输入路径；未配置知识库时也显示这个入口。
 - 挂载后面板 `fetch('/agentero/api/papers', { cache: 'no-store' })`。
 - 表格列：标题、作者、年份、标签。年份没有时用 `date`。筛选框只匹配标题和作者，在浏览器里做。
 - 与 Agentero 桌面库对齐：表头内搜索、单行截断、细分隔线、轻量悬停；列表单独滚动，表头 sticky，底部显示总数或筛选数。表格最小宽度 `38rem`，更窄的侧栏横向滚动。

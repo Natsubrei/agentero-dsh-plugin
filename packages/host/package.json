@@ -35,6 +35,9 @@
     "lib/tools.js",
     "lib/tools.d.ts",
     "lib/tools.js.map",
+    "lib/vault.js",
+    "lib/vault.d.ts",
+    "lib/vault.js.map",
     "lib/client.js",
     "lib/client/index.d.ts"
   ],

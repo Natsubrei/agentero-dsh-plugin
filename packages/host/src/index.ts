@@ -4,6 +4,7 @@ import type { ChildProcess } from 'node:child_process'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 import type { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import { cliFailure, runAgentero } from './cli-run.js'
 import {
@@ -12,12 +13,13 @@ import {
 import { listVaultNotes, readVaultFile, writeVaultNote } from './notes-files.js'
 import { readVaultPdf } from './pdf-file.js'
 import { registerTools } from './tools.js'
+import { selectVault, vaultInfo, vaultScope } from './vault.js'
 
 /** Cordis plugin name. The loader row id matches this name. */
 export const name = 'agentero-host'
 
 /** HTTP routes are registered on the composition web server. `agents` cites into a session. `tools` exposes the vault to the model. */
-export const inject = ['webServer', 'agents', 'tools']
+export const inject = ['webServer', 'agents', 'tools', 'settings']
 
 /** Optional host settings. Omitted fields use the defaults below. */
 export interface Config {
@@ -25,10 +27,20 @@ export interface Config {
   vault: string
   /** Executable name used to reach the Agentero CLI. */
   agenteroBin: string
+  /** Last selected knowledge bases in this DSH profile. */
+  recentVaults: string[]
 }
+
+export const Config = z.object({
+  vault: z.string().default(''),
+  agenteroBin: z.string().default('agentero'),
+  recentVaults: z.array(z.string()).default([]),
+})
 
 /** Prefix owned by this plugin. Longer paths under it are answered here. */
 const API_PREFIX = '/agentero/api'
+const VAULT_PATH = '/agentero/api/vault'
+const VAULT_PICK_PATH = '/agentero/api/vault/pick'
 
 /** Paper list route. */
 const PAPERS_PATH = '/agentero/api/papers'
@@ -86,7 +98,22 @@ function settingsFrom(config: unknown): Config {
   return {
     vault: typeof raw.vault === 'string' ? raw.vault : '',
     agenteroBin: typeof raw.agenteroBin === 'string' ? raw.agenteroBin : 'agentero',
+    recentVaults: Array.isArray(raw.recentVaults) ? raw.recentVaults.filter((value): value is string => typeof value === 'string') : [],
   }
+}
+
+interface VaultHost {
+  canPick(): boolean
+  pick(signal: AbortSignal): Promise<string | null>
+  save(input: string): Promise<ReturnType<typeof vaultInfo>>
+}
+
+interface DirectoryPickerLike {
+  capability(): { kind: string, pick?: (signal: AbortSignal) => Promise<string | null> }
+}
+
+interface SettingsLike {
+  mutate(namespace: string, ops: { op: 'set', path: string[], value: unknown }[]): Promise<void>
 }
 
 /** Host header name without the port. Bracketed IPv6 keeps the address inside the brackets. */
@@ -704,6 +731,7 @@ async function handleApi(
   req: IncomingMessage,
   res: ServerResponse,
   children: Set<ChildProcess>,
+  vaultHost: VaultHost,
 ): Promise<void> {
   if (!isLoopbackHost(req.headers.host)) {
     res.statusCode = 403
@@ -711,6 +739,48 @@ async function handleApi(
     return
   }
   const pathname = pathnameOf(req)
+  if (pathname === VAULT_PATH && req.method === 'GET') {
+    sendJson(res, 200, vaultInfo(settings, vaultHost.canPick()))
+    return
+  }
+  if (pathname !== PDFIUM_WASM_PATH && req.headers['x-agentero-vault'] !== vaultScope(settings.vault)) {
+    sendJson(res, 409, { error: 'vault changed' })
+    return
+  }
+  if (pathname === VAULT_PATH || pathname === VAULT_PICK_PATH) {
+    const expectedMethod = pathname === VAULT_PATH ? 'PUT' : 'POST'
+    if (req.method !== expectedMethod) {
+      res.statusCode = 405
+      res.setHeader('allow', expectedMethod)
+      res.end()
+      return
+    }
+    // JSON + same-origin prevents a website from opening a host chooser or changing the profile.
+    const origin = req.headers.origin
+    if ((origin !== undefined && origin !== `http://${req.headers.host}` && origin !== `https://${req.headers.host}`)
+      || !req.headers['content-type']?.toLowerCase().startsWith('application/json')) {
+      sendJson(res, 403, { error: 'invalid origin' })
+      return
+    }
+    if (pathname === VAULT_PICK_PATH) {
+      if (!vaultHost.canPick()) { sendJson(res, 409, { error: 'directory picker unavailable' }); return }
+      const controller = new AbortController()
+      const abort = (): void => { controller.abort() }
+      res.once('close', abort)
+      try { sendJson(res, 200, { path: await vaultHost.pick(controller.signal) }) }
+      finally { res.off('close', abort) }
+      return
+    }
+    const body = await readObject(req, res)
+    if (body === undefined) return
+    if (typeof body.path !== 'string') { sendJson(res, 400, { error: 'invalid vault' }); return }
+    try { sendJson(res, 200, await vaultHost.save(body.path)) }
+    catch (error) {
+      if (error instanceof Error && error.message === 'invalid vault') sendJson(res, 400, { error: 'invalid vault' })
+      else throw error
+    }
+    return
+  }
   if (pathname === PAPERS_PATH) {
     await handlePapers(settings, req, res, children)
     return
@@ -779,22 +849,41 @@ async function handleApi(
  * Read `vault` and `agenteroBin`. Serve paper list, PDF bytes, marks, and
  * note files under `/agentero/api`. `POST /agentero/api/context` queues a
  * citation on the named session without waking its driver.
- * Schemastery lives in the harness workspace
- * (`@deepseek-ai/cosmokit` is `workspace:~`), so this entry applies the defaults
- * itself instead of importing that package.
+ * Config uses the Harness-provided schema so vault selection is persisted
+ * through DSH's settings writer, preserving other profile fields.
  * @param ctx - Host plugin context.
  * @param config - Raw loader config. Missing fields use the defaults.
  */
 export function apply(ctx: Context, config?: unknown): void {
   const settings = settingsFrom(config)
   const agents = (ctx as Context & { agents: AgentRegistryLike }).agents
+  const picker = (): ReturnType<DirectoryPickerLike['capability']> | undefined => (ctx.get('directoryPicker') as DirectoryPickerLike | undefined)?.capability()
+  const vaultHost: VaultHost = {
+    canPick: () => picker()?.kind === 'native',
+    async pick(signal) {
+      const capability = picker()
+      if (capability?.kind !== 'native' || capability.pick === undefined) throw new Error('directory picker unavailable')
+      return capability.pick(signal)
+    },
+    async save(input) {
+      const canPick = vaultHost.canPick()
+      const next = await selectVault(settings, input, async (value) => {
+        const writer = ctx.get('settings') as SettingsLike
+        await writer.mutate('agentero-host', [
+          { op: 'set', path: ['vault'], value: value.vault },
+          { op: 'set', path: ['recentVaults'], value: value.recentVaults },
+        ])
+      })
+      return vaultInfo(next, canPick)
+    },
+  }
   ctx.effect(() => {
     console.log('[agentero] plugin loaded')
     const children = new Set<ChildProcess>()
     const route: WebRoute = {
       kind: 'prefix',
       path: API_PREFIX,
-      handler: (req, res) => handleApi(settings, agents, req, res, children).catch((error: unknown) => {
+      handler: (req, res) => handleApi(settings, agents, req, res, children, vaultHost).catch((error: unknown) => {
         if (res.headersSent) return
         const message = error instanceof Error ? error.message : String(error)
         sendJson(res, 502, { error: message })

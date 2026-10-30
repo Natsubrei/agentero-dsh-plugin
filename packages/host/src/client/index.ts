@@ -1,5 +1,14 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-locale/client'
+
+export interface VaultInfo {
+  path: string
+  name: string
+  scope: string
+  recentVaults: { path: string, name: string }[]
+  canPick: boolean
+}
 
 /** Document a later panel can open. */
 export type AgenteroOpenerKind = 'paper' | 'note'
@@ -9,6 +18,9 @@ export type AgenteroOpener = (id: string) => void
 
 /** Browser service other Agentero panels reach through `ctx.get('agentero')`. */
 export interface AgenteroClient {
+  getVault(): Promise<VaultInfo>
+  /** Requests remain tied to the source opened by this page, even if another page switches vaults. */
+  request(url: string, init?: RequestInit): Promise<Response>
   /**
    * Replace the opener for one kind.
    * @param kind - Document kind.
@@ -32,6 +44,9 @@ export interface PdfNotesOwner {
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    'agentero.host': 'vaultChanged' | 'unavailable'
+  }
   interface SlotMap {
     /**
      * Single notes column declared by the PDF panel.
@@ -55,16 +70,55 @@ declare module '@deepseek-ai/cordis' {
 /** Browser plugin name. The service key is the same name. */
 export const name = 'agentero'
 
-/** This entry provides `agentero` and waits on no other service. */
-export const inject: readonly string[] = []
+/** Locale is shared by source-change errors across Library, Notes and PDF. */
+export const inject = ['locale']
 
 /**
  * Provide the `agentero` service. Openers stay empty until a later step.
  * @param ctx - Browser plugin context.
  */
 export function apply(ctx: Context): void {
+  ctx.effect(() => ctx.locale.register('agentero.host', {
+    en: {
+      vaultChanged: 'The knowledge base has changed. Save any unsaved text elsewhere, then reload this page.',
+      unavailable: 'Could not connect to the knowledge base.',
+    },
+    zh: {
+      vaultChanged: '知识库已切换，请另存未保存的内容后刷新页面。',
+      unavailable: '无法连接知识库。',
+    },
+  }))
+  const t = ctx.locale.bind('agentero.host')
+  let source: Promise<VaultInfo> | undefined
+  const getVault = (): Promise<VaultInfo> => {
+    source ??= fetch('/agentero/api/vault', { cache: 'no-store' }).then(async (response) => {
+      const body: unknown = await response.json()
+      if (!response.ok || body === null || typeof body !== 'object'
+        || !('path' in body) || typeof body.path !== 'string'
+        || !('scope' in body) || typeof body.scope !== 'string') throw new Error(t('unavailable'))
+      return body as VaultInfo
+    }).catch((error: unknown) => {
+      source = undefined
+      throw error
+    })
+    return source
+  }
   const openers = new Map<AgenteroOpenerKind, AgenteroOpener>()
   const agentero: AgenteroClient = {
+    getVault,
+    async request(url, init) {
+      const vault = await getVault()
+      const headers = new Headers(init?.headers)
+      headers.set('x-agentero-vault', vault.scope)
+      const response = await fetch(url, { ...init, headers })
+      if (response.status === 409) {
+        const body = await response.clone().json() as { error?: unknown }
+        if (body.error === 'vault changed') return new Response(JSON.stringify({ error: t('vaultChanged') }), {
+          status: 409, headers: { 'content-type': 'application/json' },
+        })
+      }
+      return response
+    },
     registerOpener(kind, opener) {
       openers.set(kind, opener)
       return () => {

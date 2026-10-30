@@ -19,6 +19,7 @@ declare module '@deepseek-ai/cordis' {
     /** Opener registry from the host browser plugin. */
     agentero: {
       registerOpener(kind: 'paper' | 'note', opener: (id: string) => void): () => void
+      request(url: string, init?: RequestInit): Promise<Response>
     }
   }
 }
@@ -182,6 +183,7 @@ export const inject = ['slots', 'locale', 'agentero', 'sidebarRight', 'sidebarRi
  * @param ctx - Browser plugin context.
  */
 export function apply(ctx: Context): void {
+  const request = ctx.agentero.request.bind(ctx.agentero)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }))
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.sidebarRightTabs.register({
@@ -196,7 +198,7 @@ export function apply(ctx: Context): void {
 
   const face: PdfInjected = {
     async loadPdf(ref) {
-      const response = await fetch(`/agentero/api/pdf?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
+      const response = await request(`/agentero/api/pdf?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
       if (!response.ok) {
         const body = await parseBody(response)
         throw new Error(errorText(body) ?? '')
@@ -204,14 +206,14 @@ export function apply(ctx: Context): void {
       return response.arrayBuffer()
     },
     async loadMarks(ref) {
-      const response = await fetch(`/agentero/api/marks?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
+      const response = await request(`/agentero/api/marks?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
       const body = await parseBody(response)
       if (!response.ok) throw new Error(errorText(body) ?? '')
       const paths = listPaths(body)
       const marks: PaintMark[] = []
       const seen = new Set<string>()
       for (const path of paths) {
-        const file = await fetch(`/agentero/api/notes/file?path=${encodeURIComponent(path)}`, { cache: 'no-store' })
+        const file = await request(`/agentero/api/notes/file?path=${encodeURIComponent(path)}`, { cache: 'no-store' })
         const parsed = await parseBody(file)
         if (!file.ok) continue
         const record = recordOf(parsed)
@@ -225,7 +227,7 @@ export function apply(ctx: Context): void {
       return marks
     },
     async addMark(body) {
-      const response = await fetch('/agentero/api/marks', {
+      const response = await request('/agentero/api/marks', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -236,7 +238,7 @@ export function apply(ctx: Context): void {
       return translationOf(parsed)
     },
     async cite(sessionId, text) {
-      const response = await fetch('/agentero/api/context', {
+      const response = await request('/agentero/api/context', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ sessionId, text }),
