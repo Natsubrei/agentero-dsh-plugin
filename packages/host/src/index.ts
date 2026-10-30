@@ -11,6 +11,7 @@ import {
 } from './catalog.js'
 import { listVaultNotes, readVaultFile, writeVaultNote } from './notes-files.js'
 import { readVaultPdf } from './pdf-file.js'
+import { handleRecommendRequest } from './recommend.js'
 import { registerTools } from './tools.js'
 
 /** Cordis plugin name. The loader row id matches this name. */
@@ -25,6 +26,8 @@ export interface Config {
   vault: string
   /** Executable name used to reach the Agentero CLI. */
   agenteroBin: string
+  /** Agentero desktop settings file. Empty resolves `$XDG_CONFIG_HOME/agentero/settings.json`. */
+  agenteroSettings: string
 }
 
 /** Prefix owned by this plugin. Longer paths under it are answered here. */
@@ -86,6 +89,7 @@ function settingsFrom(config: unknown): Config {
   return {
     vault: typeof raw.vault === 'string' ? raw.vault : '',
     agenteroBin: typeof raw.agenteroBin === 'string' ? raw.agenteroBin : 'agentero',
+    agenteroSettings: typeof raw.agenteroSettings === 'string' ? raw.agenteroSettings : '',
   }
 }
 
@@ -710,6 +714,7 @@ async function handleApi(
     res.end()
     return
   }
+  if (await handleRecommendRequest(settings, req, res, children)) return
   const pathname = pathnameOf(req)
   if (pathname === PAPERS_PATH) {
     await handlePapers(settings, req, res, children)

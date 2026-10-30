@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const tsc = join(root, 'node_modules/typescript/bin/tsc')
-const packages = ['host', 'library', 'notes', 'pdf']
+const packages = ['host', 'library', 'notes', 'pdf', 'recommend']
 const noEmit = process.argv.includes('--noEmit')
 
 function run(cwd, args) {

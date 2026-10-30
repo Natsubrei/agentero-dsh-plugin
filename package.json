@@ -27,7 +27,8 @@
     "agentero-dsh-host": "file:./packages/host",
     "agentero-dsh-library": "file:./packages/library",
     "agentero-dsh-notes": "file:./packages/notes",
-    "agentero-dsh-pdf": "file:./packages/pdf"
+    "agentero-dsh-pdf": "file:./packages/pdf",
+    "agentero-dsh-recommend": "file:./packages/recommend"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.16",

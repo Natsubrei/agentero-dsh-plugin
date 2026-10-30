@@ -7,3 +7,5 @@
       name: agentero-dsh-notes
     - id: agentero-pdf
       name: agentero-dsh-pdf
+    - id: agentero-recommend
+      name: agentero-dsh-recommend
