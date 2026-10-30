@@ -10,6 +10,20 @@
 }
 
 /*
+ * EmbedPDF draws text selections itself. Native browser selection can also
+ * select the page raster, tinting the entire sheet blue during a text drag.
+ * Keep this on page surfaces so reader controls can still select native text.
+ */
+.agentero-pdf [data-embed-pdf-page] {
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+.agentero-pdf [data-embed-pdf-page] img {
+	-webkit-user-drag: none;
+}
+
+/*
  * PDF bottom-bar zoom slider: muted gray at rest, brand accent on hover /
  * focus / drag so the control stays quiet until the pointer engages it.
  */
