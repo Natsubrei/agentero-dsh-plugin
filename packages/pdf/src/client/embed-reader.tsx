@@ -39,7 +39,6 @@ import { loadPdfEngine } from './engine'
 import {
   PDF_PAGE_RASTER_DARK_CLASS,
   PDF_PAPER_SHELL_CLASS,
-  PDF_PAPER_TINT,
   type PdfPaperTone,
 } from './page-theme'
 import { PdfBottomBar } from './pdf-bottom-bar'
@@ -264,7 +263,6 @@ function PdfPage(props: {
     width: size?.width && size.width > 0 ? size.width : cssW,
     height: size?.height && size.height > 0 ? size.height : cssH,
   }
-  const paperTint = PDF_PAPER_TINT[pdfTone]
   const dark = pdfTone === 'dark'
   const overlays = pageMarks.flatMap(mark => mark.rects.map((rect, index) => {
     const x = mark.space === 'pt' ? rect.x / pageSize.width : rect.x
@@ -301,13 +299,6 @@ function PdfPage(props: {
         pageIndex={layout.pageIndex}
         className={cn('absolute inset-0', dark && PDF_PAGE_RASTER_DARK_CLASS)}
       />
-      {paperTint === null ? null : (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 mix-blend-multiply"
-          style={{ backgroundColor: paperTint }}
-        />
-      )}
       {overlays}
       <SelectionLayer documentId={documentId} pageIndex={layout.pageIndex} />
       <CommentCards marks={pageMarks} pageHeight={cssH} pageSize={pageSize} t={t} />

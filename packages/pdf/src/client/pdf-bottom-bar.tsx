@@ -30,8 +30,6 @@ type PdfT = PropsLocale<"agentero.pdf">["t"];
 
 const TONE_LABEL = {
 	white: "paperToneWhite",
-	sepia: "paperToneSepia",
-	green: "paperToneGreen",
 	dark: "paperToneDark",
 } as const;
 
@@ -258,8 +256,7 @@ function PdfPaperToneButton({
 									aria-label={label}
 									aria-pressed={pdfTone === paperTone}
 									className={cn(
-										"size-5 shrink-0 rounded-full ring-1 ring-black/15 transition-transform duration-100 hover:scale-105 active:scale-95 dark:ring-white/25",
-										PDF_PAPER_SWATCH_CLASS[paperTone],
+										"size-5 shrink-0 rounded-full border-0 p-0 ring-1 ring-black/15 transition-transform duration-100 hover:scale-105 active:scale-95 dark:ring-white/25",
 										pdfTone === paperTone &&
 											"ring-2 ring-foreground/70 ring-offset-1 ring-offset-popover",
 									)}
@@ -267,7 +264,15 @@ function PdfPaperToneButton({
 										onSetPdfTone(paperTone);
 										setPickerOpen(false);
 									}}
-								/>
+								>
+									<span
+										aria-hidden
+										className={cn(
+											"block size-full rounded-full",
+											PDF_PAPER_SWATCH_CLASS[paperTone],
+										)}
+									/>
+								</button>
 							</TooltipTrigger>
 							<TooltipContent side="top">{label}</TooltipContent>
 						</Tooltip>
