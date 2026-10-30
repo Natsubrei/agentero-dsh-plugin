@@ -1,6 +1,6 @@
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangeEvent, ReactNode } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from './button'
 import { Input } from './input'
 import {
@@ -50,9 +50,10 @@ export function LibraryPanel({
   deletePaper,
   download,
 }: LibraryPanelProps): ReactNode {
-  const [status, setStatus] = useState<
-    { kind: 'loading' } | { kind: 'error', message: string } | { kind: 'ready', papers: PaperRow[] }
-  >({ kind: 'loading' })
+  /** Rows survive a reload so a tag edit never blanks the table. */
+  const [papers, setPapers] = useState<PaperRow[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [query, setQuery] = useState('')
   const [pdfMissing, setPdfMissing] = useState(false)
   const [revision, setRevision] = useState(0)
@@ -61,27 +62,26 @@ export function LibraryPanel({
   const [importText, setImportText] = useState('')
   const [keyword, setKeyword] = useState('')
   const [found, setFound] = useState<{ id: string, title: string }[]>([])
-  const [tagDraft, setTagDraft] = useState<Record<string, string>>({})
   const [sortKey, setSortKey] = useState<ColumnKey>('title')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   useEffect(() => {
     let cancelled = false
-    setStatus({ kind: 'loading' })
     loadPapers()
       .then((body) => {
         if (cancelled) return
-        setStatus({ kind: 'ready', papers: papersFrom(body) })
+        setPapers(papersFrom(body))
+        setLoadError('')
+        setLoaded(true)
       })
       .catch((error: unknown) => {
         if (cancelled) return
-        const message = error instanceof Error ? error.message : String(error)
-        setStatus({ kind: 'error', message })
+        setLoadError(error instanceof Error ? error.message : String(error))
+        setLoaded(true)
       })
     return () => { cancelled = true }
   }, [loadPapers, revision])
 
-  const papers = status.kind === 'ready' ? status.papers : []
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
     const matched = needle === ''
@@ -93,21 +93,62 @@ export function LibraryPanel({
     return copy
   }, [papers, query, sortKey, sortDir])
 
-  const run = (action: () => Promise<void>): void => {
+  /** Resolves true when the action succeeded, so callers can clear their draft. */
+  const run = useCallback((action: () => Promise<void>): Promise<boolean> => {
     setBusy(true)
     setBanner('')
-    void action().catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : ''
-      setBanner(shown(message, t))
-    }).finally(() => { setBusy(false) })
-  }
+    return action()
+      .then(() => true)
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : ''
+        setBanner(shown(message, t))
+        return false
+      })
+      .finally(() => { setBusy(false) })
+  }, [t])
 
-  const reload = (): void => { setRevision(value => value + 1) }
+  const reload = useCallback((): void => { setRevision(value => value + 1) }, [])
+
+  const addTagFor = useCallback((ref: string, tag: string): Promise<boolean> => (
+    run(async () => {
+      await addTag(ref, tag)
+      reload()
+    })
+  ), [addTag, reload, run])
+
+  const removeTagFor = useCallback((ref: string, name: string): void => {
+    void run(async () => {
+      await removeTag(ref, name)
+      reload()
+    })
+  }, [reload, removeTag, run])
+
+  const openFor = useCallback((ref: string): void => {
+    setPdfMissing(!openPaper(ref))
+  }, [openPaper])
+
+  const downloadFor = useCallback((ref: string): void => {
+    void run(async () => { await download(ref) })
+  }, [download, run])
+
+  const deleteFor = useCallback((ref: string): void => {
+    void run(async () => {
+      await deletePaper(ref)
+      reload()
+    })
+  }, [deletePaper, reload, run])
+
+  const ctx = useMemo<CellCtx>(() => ({
+    t,
+    busy,
+    onAddTag: addTagFor,
+    onRemoveTag: removeTagFor,
+  }), [addTagFor, busy, removeTagFor, t])
 
   const importCurrent = (): void => {
     const text = importText.trim()
     if (text === '') return
-    run(async () => {
+    void run(async () => {
       await importId(text)
       setImportText('')
       reload()
@@ -124,16 +165,16 @@ export function LibraryPanel({
   }
 
   let body: ReactNode
-  if (status.kind === 'loading') {
+  if (!loaded) {
     body = (
       <div className='flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground'>
         {t('loading')}
       </div>
     )
-  } else if (status.kind === 'error') {
+  } else if (loadError !== '' && papers.length === 0) {
     body = (
       <div className='flex min-h-0 flex-1 items-center justify-center p-8 text-center text-sm text-muted-foreground'>
-        {status.message === '' ? t('loadFailed') : shown(status.message, t)}
+        {loadError === '' ? t('loadFailed') : shown(loadError, t)}
       </div>
     )
   } else {
@@ -160,47 +201,17 @@ export function LibraryPanel({
               onInputChange={setQuery}
             />
             <tbody>
-              {filtered.map(paper => {
-                const ctx: CellCtx = {
-                  t,
-                  busy,
-                  tagDraft: tagDraft[paper.openId] ?? '',
-                  onTagDraft: (value) => {
-                    setTagDraft(current => ({ ...current, [paper.openId]: value }))
-                  },
-                  onAddTag: (tag) => {
-                    run(async () => {
-                      await addTag(paper.openId, tag)
-                      setTagDraft(current => ({ ...current, [paper.openId]: '' }))
-                      reload()
-                    })
-                  },
-                  onRemoveTag: (name) => {
-                    run(async () => {
-                      await removeTag(paper.openId, name)
-                      reload()
-                    })
-                  },
-                }
-                return (
-                  <LibraryPaperRow
-                    key={paper.key}
-                    paper={paper}
-                    ctx={ctx}
-                    busy={busy}
-                    onOpen={(openId) => { setPdfMissing(!openPaper(openId)) }}
-                    onDownload={() => {
-                      run(async () => { await download(paper.openId) })
-                    }}
-                    onDelete={() => {
-                      run(async () => {
-                        await deletePaper(paper.openId)
-                        reload()
-                      })
-                    }}
-                  />
-                )
-              })}
+              {filtered.map(paper => (
+                <LibraryPaperRow
+                  key={paper.key}
+                  paper={paper}
+                  ctx={ctx}
+                  busy={busy}
+                  onOpen={openFor}
+                  onDownload={downloadFor}
+                  onDelete={deleteFor}
+                />
+              ))}
             </tbody>
           </table>
         </div>
@@ -246,7 +257,7 @@ export function LibraryPanel({
           onChange={(event) => { setKeyword(event.target.value) }}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || keyword.trim() === '') return
-            run(async () => { setFound(await discover(keyword.trim())) })
+            void run(async () => { setFound(await discover(keyword.trim())) })
           }}
         />
         <Button
@@ -255,7 +266,7 @@ export function LibraryPanel({
           size='sm'
           disabled={busy || keyword.trim() === ''}
           onClick={() => {
-            run(async () => { setFound(await discover(keyword.trim())) })
+            void run(async () => { setFound(await discover(keyword.trim())) })
           }}
         >
           {t('discoverAction')}
@@ -266,15 +277,18 @@ export function LibraryPanel({
           size='sm'
           disabled={busy}
           onClick={() => {
-            run(async () => {
+            void run(async () => {
               const text = await exportBib()
               const blob = new Blob([text], { type: 'application/x-bibtex' })
               const url = URL.createObjectURL(blob)
               const link = document.createElement('a')
               link.href = url
               link.download = 'library.bib'
+              document.body.appendChild(link)
               link.click()
-              URL.revokeObjectURL(url)
+              link.remove()
+              // Revoking in the same tick cancels the download in some browsers.
+              setTimeout(() => { URL.revokeObjectURL(url) }, 10_000)
             })
           }}
         >
@@ -296,7 +310,7 @@ export function LibraryPanel({
                 const file = event.target.files?.[0]
                 event.target.value = ''
                 if (file === undefined) return
-                run(async () => {
+                void run(async () => {
                   await importBib(await file.text())
                   reload()
                 })
@@ -309,6 +323,11 @@ export function LibraryPanel({
       {banner === '' ? null : (
         <p className='px-3 py-2 text-xs text-destructive'>{banner}</p>
       )}
+      {loadError === '' || papers.length === 0 ? null : (
+        <p className='px-3 py-2 text-xs text-destructive'>
+          {shown(loadError, t)}
+        </p>
+      )}
       {found.length === 0 ? null : (
         <div className='flex flex-wrap gap-1.5 border-b border-border/40 px-3 py-2'>
           {found.map(item => (
@@ -320,7 +339,7 @@ export function LibraryPanel({
               disabled={busy}
               className='max-w-full'
               onClick={() => {
-                run(async () => {
+                void run(async () => {
                   await importId(item.id)
                   setFound(current => current.filter(row => row.id !== item.id))
                   reload()

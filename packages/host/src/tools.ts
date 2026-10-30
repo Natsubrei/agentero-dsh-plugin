@@ -34,7 +34,12 @@ const objectSchema = {
   additionalProperties: true,
 } as const
 
-function textResult(value: unknown): { type: 'text', text: string }[] {
+/**
+ * Render a tool result. The tools API calls `render(arguments, value)`, so the
+ * value to serialize is the second parameter — declaring only one would
+ * stringify the arguments and hand the model an echo of its own call.
+ */
+function textResult(_arguments: unknown, value: unknown): { type: 'text', text: string }[] {
   return [{ type: 'text', text: JSON.stringify(value) }]
 }
 
