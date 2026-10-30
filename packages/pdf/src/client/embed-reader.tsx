@@ -219,7 +219,7 @@ function ReaderChrome(props: EmbedReaderProps): ReactNode {
     <div className="relative h-full min-h-0">
       <div ref={hostRef} className="absolute inset-0">
         <Viewport documentId={docId} className="h-full bg-muted/40">
-          <ZoomGestureWrapper documentId={docId} enableWheel={false}>
+          <ZoomGestureWrapper documentId={docId} enableWheel>
             <GlobalPointerProvider documentId={docId}>
               <Scroller documentId={docId} renderPage={renderPage} />
             </GlobalPointerProvider>
