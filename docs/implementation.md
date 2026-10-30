@@ -8,21 +8,21 @@
 
 ## 产品
 
-Agentero 作为 dsh 的组合包，提供三块互不运行时引用的界面：文献库、笔记库、PDF。数据和标注继续留在 Agentero Vault 里。dsh 负责会话。插件把「论文路径、页码、原文、笔记」交给当前仍选中的 dsh 会话。
+Agentero 作为 dsh 的组合包，提供四块互不运行时引用的界面：文献库、笔记库、PDF、推荐。数据和标注继续留在 Agentero Vault 里。dsh 负责会话。插件把「论文路径、页码、原文、笔记」交给当前仍选中的 dsh 会话。
 
 目标场景：导师在会话里让用户调研一个方向，并和已有研究结合。
 
 1. 模型用 Host 工具读已有文献、把短名单写入 Vault。
 2. 文献表面列出这些论文。
-3. 用户在 PDF 里阅读，笔记写在该论文的 `NOTES.md` 上；划词成为可点回的证据。
+3. 用户在 PDF 里阅读，划词成为可点回的证据，想法写进 `notes/` 的独立笔记。
 4. 独立想法进 `notes/`。
 5. 会话拿这些笔记和出处整理汇报。飞书写入不属于本插件。
 
-不做：双链解析与跳转、图谱、写作工程、把 Agentero 桌面阅读器（EmbedPDF / PDFium / Tauri）搬进浏览器。文献、笔记和 PDF 挂在会话右栏，不占左侧活动栏，也不替换中间的对话。
+不做：双链解析与跳转、图谱、写作工程、把 Agentero 桌面阅读器（EmbedPDF / PDFium / Tauri）搬进浏览器。文献、笔记、PDF 和推荐挂在会话右栏，不占左侧活动栏，也不替换中间的对话。
 
 ## 解耦
 
-三个界面是三个 loader 插件。它们不 `import` 彼此的运行时模块。
+四个界面是四个 loader 插件。它们不 `import` 彼此的运行时模块。
 
 | 允许 | 不允许 |
 |---|---|
@@ -39,11 +39,11 @@ dsh 规则（`deepseek-harness/packages/client/AGENTS.md`、`docs/subsystems/slo
 - 浏览器包声明 `dsh.client.platform: "web"`，`exports["./client"]` 指向构建后的 `lib/client.js`。
 - `lib/client.js` 必须以 `window.__ModuleLoader__.load({ id: "<包名>", factory: (require) => {...} })` 开头。
 - `react`、`react-dom`、`@deepseek-ai/cordis`、`@deepseek-ai/dsh-client-*`、`@deepseek-ai/dsh-api-*` 必须是 factory 里的 `require()`，不能打进 bundle。平台模块名单：`deepseek-harness/packages/client/web/src/platform.ts` 的 `PLATFORM_MODULES`。`@embedpdf/*` 打进 PDF 包。`pdfium.wasm` 不打进 bundle，由 Host `GET /agentero/api/pdfium.wasm` 提供。
-- 对话留在中间。文献、笔记、PDF 是会话右栏的页：`ctx.sidebarRightTabs.register` 声明类型，正文注册在 `sidebar.right.pane.tab`。文献和笔记带 `guide`，出现在开始页，排在浏览器后面。PDF 没有卡片，文献行通过 `agentero.open` 调到 `sidebarRight.openTab('agentero.pdf', { params: { ref } })`。同一窗格再次打开聚焦已有的那一页。PDF 类型 `keepMounted: true`。论文路径跟这个 tab 的导航参数走，不放在全局快照里。论文笔记槽作用域是 `session`。加入对话写入这一页绑定的会话，不 `selectPanel`。参考：`deepseek-harness/packages/client/ui-sidebar-right/README.zh.md`。
+- 对话留在中间。文献、笔记、PDF、推荐是会话右栏的页：`ctx.sidebarRightTabs.register` 声明类型，正文注册在 `sidebar.right.pane.tab`。文献、笔记和推荐带 `guide`，出现在开始页，排在浏览器后面。PDF 没有卡片，文献行通过 `agentero.open` 调到 `sidebarRight.openTab('agentero.pdf', { params: { ref } })`。同一窗格再次打开聚焦已有的那一页。PDF 类型 `keepMounted: true`。论文路径跟这个 tab 的导航参数走，不放在全局快照里。加入对话写入这一页绑定的会话，不 `selectPanel`。参考：`deepseek-harness/packages/client/ui-sidebar-right/README.zh.md`。
 - 文案走 `ctx.locale.register`，至少 en 和 zh。失败提示若要在面板关闭后还在，挂 `shell.overlay`。字重不超过 500。macOS 顶栏用页面自己的 padding 加上 `--dsh-frame-top-clearance`，不要改这个全局量。
 - 树外插件进不了 harness 的 typert Remote 生成（`scripts/generate-typert.ts`）。不要新增 `@Remote`。浏览器访问 Vault 走 Host 在 `ctx.webServer` 上注册的本机 HTTP。
 
-卸掉其中一个界面插件时，另外两个必须仍能加载。PDF 不在时，文献行点击得到 `open` 返回 false，面板内已有文案「PDF 插件未启用」。
+卸掉其中一个界面插件时，其余界面必须仍能加载。PDF 不在时，文献行点击得到 `open` 返回 false，面板内已有文案「PDF 插件未启用」。
 
 ## 仓库形态
 
@@ -52,7 +52,7 @@ dsh 规则（`deepseek-harness/packages/client/AGENTS.md`、`docs/subsystems/slo
 ```text
 agentero-dsh-plugin/
   cordis.patch.yml
-  package.json              # file: 依赖下面四个包
+  package.json              # file: 依赖下面五个包
   pnpm-workspace.yaml
   scripts/build-all.mjs
   scripts/build-client.mjs
@@ -62,6 +62,7 @@ agentero-dsh-plugin/
   packages/library/         # agentero-dsh-library
   packages/notes/           # agentero-dsh-notes
   packages/pdf/             # agentero-dsh-pdf
+  packages/recommend/       # agentero-dsh-recommend
 ```
 
 `cordis.patch.yml`：
@@ -76,6 +77,8 @@ agentero-dsh-plugin/
       name: agentero-dsh-notes
     - id: agentero-pdf
       name: agentero-dsh-pdf
+    - id: agentero-recommend
+      name: agentero-dsh-recommend
 ```
 
 | loader id | npm 名 | Node `name` | 浏览器入口 | 主面板 key | 侧栏 order |
@@ -84,6 +87,7 @@ agentero-dsh-plugin/
 | `agentero-library` | `agentero-dsh-library` | `agentero-library` | `agentero-library` | `agentero.library` | 30 |
 | `agentero-notes` | `agentero-dsh-notes` | `agentero-notes` | `agentero-notes` | `agentero.notes` | 31 |
 | `agentero-pdf` | `agentero-dsh-pdf` | `agentero-pdf` | `agentero-pdf` | `agentero.pdf` | 32 |
+| `agentero-recommend` | `agentero-dsh-recommend` | `agentero-recommend` | `agentero-recommend` | `agentero.recommend` | 33 |
 
 类型解析靠各包 `tsconfig.json` / `tsconfig.client.json` 的 `paths`，指向 `../../../deepseek-harness/...` 已构建的 `lib/types`。没有旁边这份 harness 检出时，`pnpm install` 的 `prepare` 会失败。不要把插件写进 harness 的 `pnpm-workspace.yaml`。
 
@@ -95,7 +99,7 @@ corepack pnpm install
 corepack pnpm build
 ```
 
-`scripts/build-all.mjs` 对四个包依次：`tsc -p tsconfig.json`、`tsc -p tsconfig.client.json`、`node ../../scripts/build-client.mjs`、`node --check` Node 入口和 `lib/client.js`。`build-client.mjs` 用 esbuild 打 CJS，`packages: 'external'`，再套上 `__ModuleLoader__.load`。`lib/` 不提交。
+`scripts/build-all.mjs` 对五个包依次：`tsc -p tsconfig.json`、`tsc -p tsconfig.client.json`、`node ../../scripts/build-client.mjs`、`node --check` Node 入口和 `lib/client.js`。`build-client.mjs` 用 esbuild 打 CJS，`packages: 'external'`，再套上 `__ModuleLoader__.load`。`lib/` 不提交。
 
 安装进名为 `agentero` 的 profile（详见 `CONTRIBUTING.md`）：
 
@@ -106,7 +110,7 @@ corepack pnpm dsh --profile agentero --dump-config
 corepack pnpm dsh web --profile agentero --no-open
 ```
 
-`--dump-config` 里应有 `# == agentero-dsh-plugin` 和上面四个 id。终端应打印 `[agentero] plugin loaded`。浏览器 `http://127.0.0.1:3080`。
+`--dump-config` 里应有 `# == agentero-dsh-plugin` 和上面五个 id。终端应打印 `[agentero] plugin loaded`。浏览器 `http://127.0.0.1:3080`。
 
 **这一步还没有在正在运行的 dsh 里验证过。** 代码写完后没有执行 `dsh plugin add`，也没有用真实论文点过界面。
 
@@ -117,9 +121,10 @@ corepack pnpm dsh web --profile agentero --no-open
   config:
     vault: /绝对路径/到/Vault
     agenteroBin: agentero
+    agenteroSettings: /绝对路径/到/agentero/settings.json
 ```
 
-`agentero` 必须在 PATH 上，或把 `agenteroBin` 写成绝对路径。命令是参数数组，不要经 shell。
+`agentero` 必须在 PATH 上，或把 `agenteroBin` 写成绝对路径。`agenteroSettings` 可以省略，默认读 `$XDG_CONFIG_HOME/agentero/settings.json`（macOS/Linux 通常是 `~/.config/agentero/settings.json`）。推荐面板只从这份文件读取 Embedding 与知乎凭证，不会把密钥发回浏览器。命令是参数数组，不要经 shell。
 
 ## 任务清单
 
@@ -127,7 +132,7 @@ corepack pnpm dsh web --profile agentero --no-open
 
 | ID | 事项 | 状态 |
 |---|---|---|
-| T1 | 根包改为组合包，四个 loader 包，侧栏三个空面板 | 已完成 |
+| T1 | 根包改为组合包，五个 loader 包，侧栏四个面板 | 已完成 |
 | T2 | Host `GET /agentero/api/papers`，文献表面搜索和表格 | 已完成；真实 Vault 的列表与表头搜索已在 DSH 中验证 |
 | T3 | Host 笔记文件接口，笔记表面列表、渲染、编辑保存 | 已完成，未在 dsh 里点过 |
 | T4 | Host `GET /agentero/api/pdf`，PDF 表面用 EmbedPDF / PDFium 阅读，注册 `paper` 打开器 | 代码已完成。wasm 走 `GET /agentero/api/pdfium.wasm` |
@@ -135,15 +140,16 @@ corepack pnpm dsh web --profile agentero --no-open
 | T6 | 划词：高亮、批注、翻译、复制、加入当前 dsh 会话、快速对话 | 代码已完成，未在 dsh 里点过 |
 | T7 | 文献写操作：导入、标签、回收站删除、BibTeX、发现、补下载、已读 | 代码已完成。删除只进回收站。没有单独的元数据改写命令，CLI 没有就不做 |
 | T8 | Host 注册给模型用的工具（列论文、导入、读笔记、搜索笔记、发现） | 代码已完成 |
-| T9 | 把插件装进 profile，配 Vault，用真实论文走通 | 已在 `web` profile 上走通文献列表、笔记渲染、PDF 翻页和论文笔记槽。标签增删已用接口验证并复原。BibTeX 导出和 arXiv 发现因 CLI 访问外网失败返回 502。卸插件和划词加入会话还没点 |
+| T9 | 把插件装进 profile，配 Vault，用真实论文走通 | 已在 `web` profile 上走通文献列表、笔记渲染、PDF 翻页。标签增删已用接口验证并复原。BibTeX 导出和 arXiv 发现因 CLI 访问外网失败返回 502。卸插件和划词加入会话还没点 |
 | T10 | 版面侧栏、区域批注、全文翻译、书签写回、导出带批注 PDF | 未做，排在 T6 之后 |
 | T11 | Library 与 Agentero 桌面视觉对齐：紧凑表格、按需表单与标签编辑、菜单、错误 Toast | 已完成；在本机 DSH 验证搜索、空结果、排序、刷新保留滚动位置、菜单切换、标签输入焦点和已有 PDF 打开；本轮未执行导入、删除、标签写入等 Vault 数据变更 |
+| T12 | 推荐面板：arXiv 每日排序、知乎检索卡片、面板内配置 | 代码已完成，已在 dsh 里打开推荐页、检索知乎并点过设置面板；arXiv 计算用假 Embedding 端到端验证 |
 
 ## 已实现的行为
 
 ### Host Node
 
-文件：`packages/host/src/index.ts`、`packages/host/src/notes-files.ts`。
+文件：`packages/host/src/index.ts`、`packages/host/src/notes-files.ts`、`packages/host/src/recommend.ts`。
 
 - `inject = ['webServer']`。
 - 配置对象手写解析，不用 schemastery。`@deepseek-ai/schemastery` 依赖 harness 里 `workspace:~` 的 `@deepseek-ai/cosmokit`，这个仓库装不进来。`vault` 默认 `""`，`agenteroBin` 默认 `"agentero"`。
@@ -234,6 +240,30 @@ open(kind, id): boolean
 - 节点包括段落、标题、行内样式、列表、引用、分隔线、围栏代码、链接、表格和公式。公式用 KaTeX 的 MathML，不打包字体。光标在正文里时，底部浮出格式条。查找用 Cmd/Ctrl+F，不占常驻一行。
 - 只覆盖 `notes/`。论文 `NOTES.md` 走同一个编辑器，从 PDF 底栏的笔记按钮进入。
 
+### 推荐表面
+
+文件：`packages/recommend/src/client/index.ts`、`packages/recommend/src/client/recommend-panel.tsx`。Node 入口的 `apply` 是空的，所有网络和 CLI 调用走 Host 的 `/agentero/api/recommend`。
+
+- `inject = ['slots', 'locale', 'sidebarRightTabs']`。语言包 `agentero.recommend`，中文标题「推荐」。
+- 一个右栏页、两个分段：「arXiv 每日」和「知乎」。开始页 guide order 60。
+- arXiv 每日：默认分类 `cs.AI, cs.CL, cs.LG, cs.CV, stat.ML`，分类 chip 可以增删，选择写入 `localStorage`。打开面板先探活 Embedding 端点，再读当天缓存；没有缓存时调用 `POST /arxiv` 计算。卡片显示标题、摘要、arXiv id 和发布日期，动作是「打开」和「导入」。
+- 知乎：输入论文标题或关键词，调用 Host 的标题检索，按 `RankingScore >= 0.5` 过滤后显示回答 / 文章卡片；卡片打开知乎原文。
+- 设置抽屉：Embedding Base URL / API Key / Model 和知乎 Access Secret。留空表示继续使用 Agentero 桌面端的 `settings.json`；输入值保存到 `$XDG_CONFIG_HOME/agentero/dsh-recommend.json`（0600），接口只回传“是否已配置”，不回传明文。
+- 失败原因用固定标记：`recommend.no_embedding`、`recommend.probe_failed`、`recommend.empty_corpus`、`recommend.no_candidates`、`zhihu.no_secret`、`zhihu.empty_query`。面板把它们翻成可操作的空态。
+
+Host 路由（`packages/host/src/recommend.ts`）：
+
+| 方法与路径 | 行为 |
+|---|---|
+| `GET /agentero/api/recommend/settings` | 返回合并后的 Embedding / 知乎配置状态，不含密钥 |
+| `PUT /agentero/api/recommend/settings` | 追加插件级覆盖配置，写 0600 JSON |
+| `POST /agentero/api/recommend/probe` | POST 一个 `hi` 到 `/embeddings`，返回维度和延迟 |
+| `GET /agentero/api/recommend/arxiv?categories=` | 返回当天同分类缓存或 `null` |
+| `POST /agentero/api/recommend/arxiv` | 读 Vault 论文摘要与 arXiv RSS，Embedding 打分；同一天同参数复用缓存 |
+| `GET /agentero/api/recommend/zhihu?query=&count=` | 知乎标题检索，过滤相关度后返回卡片数据 |
+
+推荐算法沿用 Motif：论文库按 `added_at` 从新到旧，权重 `1/(1+log10(rank+1))` 归一化；候选来自 `https://rss.arxiv.org/rss/<分类>`；两边都取 `title + abstract` 做 Embedding，归一化后按权重求和排序。Embedding 请求每批 20 条，provider 批量上限报错时二分重试。推荐结果缓存到 `$XDG_CACHE_HOME/agentero/dsh-recommend-cache.json`，最多保留 24 组。
+
 ### PDF 表面
 
 文件：`packages/pdf/src/client/index.ts`。
@@ -256,7 +286,7 @@ PDF 打开时笔记列默认收起。底栏的笔记按钮按需展开或收起�
 
 T4 到 T8 的代码已经在仓库里，`corepack pnpm build` 通过。T9 用 `dsh plugin --profile web add` 装进 `~/.dsh/profiles/web`，patch 写了 Vault `/Users/qychen/03-Knowledge/agentero-dsh` 和 `target/debug/agentero-cli`。`dsh web --no-open` 打印了 `[agentero] plugin loaded`。`desktop` 这个名字被 CLI 留给 Electron，不能拿来 `dsh web`。
 
-已点过：文献表列出 RM-R1，点开后 PDF 出字，笔记列默认收起，底栏笔记按钮可展开该篇 NOTES.md，笔记库三篇独立笔记能渲染标题。`POST /agentero/api/papers/tags` 加上再删掉 `dsh-smoke`，列表回到空标签。`GET /agentero/api/pdf` 返回 PDF 字节。
+已点过：文献表列出 RM-R1，点开后 PDF 出字，笔记库三篇独立笔记能渲染标题。`POST /agentero/api/papers/tags` 加上再删掉 `dsh-smoke`，列表回到空标签。`GET /agentero/api/pdf` 返回 PDF 字节。
 
 还没做：从 patch 拿掉一行再启动的解耦冒烟、划词高亮和加入会话、模型工具在真实会话里被调用。导出 BibTeX 和 `discover arxiv` 的路由通了，CLI 连不上 `translation-server.agentero.app` 和 `export.arxiv.org`，返回 502。T10 仍然排在后面。下面各节是当时的实现说明，不要按「未做」重写阅读器。
 
@@ -371,7 +401,7 @@ Host 用 `ctx.tools.register`（见 `deepseek-harness/docs/cookbook/adding-a-too
 2. `dsh plugin --profile agentero add` 本仓库。`dump-config` 能看到四行。
 3. profile 的 patch 写上真实 `vault` 和 `agenteroBin`。
 4. `dsh web --profile agentero --no-open`。终端有 `[agentero] plugin loaded`。
-5. 侧栏能打开文献、笔记、PDF。文献表有该 Vault 的论文。点一篇能翻页，默认不显示笔记列；点底栏笔记按钮后右侧能改 `NOTES.md` 并且磁盘上变了。划一句高亮，`marks/` 里出现记录，刷新页面后高亮还在。加入对话后回到原来的会话，下一轮模型能看见这句和页码。
+5. 侧栏能打开文献、笔记、PDF。文献表有该 Vault 的论文。点一篇能翻页，底栏只有页码、缩放和纸色，没有笔记按钮。划一句高亮，`marks/` 里出现记录，刷新页面后高亮还在。加入对话后回到原来的会话，下一轮模型能看见这句和页码。
 6. 从 patch 里临时拿掉 `agentero-pdf` 再启动：文献和笔记仍在。拿掉笔记插件：PDF 仍能翻页。
 
 测试用的论文用 Vault 里已经有的，或 `agentero import` 两三篇 arXiv。不要把 PDF 二进制提交进 git。
@@ -388,7 +418,7 @@ Host 用 `ctx.tools.register`（见 `deepseek-harness/docs/cookbook/adding-a-too
 - 不要改 `deepseek-harness` 的源码来迁就插件。
 - 不要把 `agentero-dsh-plugin` 加进 Motif 的 git。
 - 不要提交 `lib/`、`node_modules/`、带本机绝对路径的 `dev.patch.yml`、Vault 路径、API key。
-- 不要把三个界面合并回一个 React 应用。
+- 不要把四个界面合并回一个 React 应用。
 - 不要用 schemastery，除非它能不依赖 harness 的 `workspace:` 协议安装。
 - 不要把论文列表再解析进一套自建数据库。Catalog 的权威是 Vault 里的 `.agentero/catalog.sqlite`，通过 CLI 读写。
 - 用户没有明确要求时不要 git commit。
