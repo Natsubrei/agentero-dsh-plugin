@@ -1,5 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { Slot } from "radix-ui";
+import { forwardRef } from "react";
 import type * as React from "react";
 
 import { cn } from "./cn";
@@ -41,20 +42,25 @@ const buttonVariants = cva(
 	},
 );
 
-function Button({
-	className,
-	variant = "default",
-	size = "default",
-	asChild = false,
-	...props
-}: React.ComponentProps<"button"> &
+type ButtonProps = React.ComponentProps<"button"> &
 	VariantProps<typeof buttonVariants> & {
 		asChild?: boolean;
-	}) {
+	};
+
+/**
+ * `forwardRef` matters: Tooltip/Popover triggers clone the child with an anchor
+ * ref. A plain function component drops that ref, so the popper never measured
+ * the trigger and the content stayed parked offscreen.
+ */
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+	{ className, variant = "default", size = "default", asChild = false, ...props },
+	ref,
+) {
 	const Comp = asChild ? Slot.Root : "button";
 
 	return (
 		<Comp
+			ref={ref as React.Ref<HTMLButtonElement>}
 			data-slot="button"
 			data-variant={variant}
 			data-size={size}
@@ -62,6 +68,6 @@ function Button({
 			{...props}
 		/>
 	);
-}
+});
 
 export { Button, buttonVariants };
