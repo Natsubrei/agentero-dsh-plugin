@@ -10,6 +10,7 @@ import {
 import {
   GlobalPointerProvider,
   InteractionManagerPluginPackage,
+  PagePointerProvider,
 } from '@embedpdf/plugin-interaction-manager/react'
 import { RenderLayer, RenderPluginPackage } from '@embedpdf/plugin-render/react'
 import { SearchPluginPackage } from '@embedpdf/plugin-search/react'
@@ -433,7 +434,9 @@ function PdfPage(props: {
   }))
 
   return (
-    <div
+    <PagePointerProvider
+      documentId={documentId}
+      pageIndex={layout.pageIndex}
       {...{ [EMBED_PAGE_ATTR]: layout.pageIndex }}
       className={cn('relative', PDF_PAPER_SHELL_CLASS[pdfTone])}
       style={{ width: cssW, height: cssH }}
@@ -441,12 +444,12 @@ function PdfPage(props: {
       <RenderLayer
         documentId={documentId}
         pageIndex={layout.pageIndex}
-        className={cn('absolute inset-0', dark && PDF_PAGE_RASTER_DARK_CLASS)}
+        className={cn('pointer-events-none absolute inset-0', dark && PDF_PAGE_RASTER_DARK_CLASS)}
       />
       <TilingLayer
         documentId={documentId}
         pageIndex={layout.pageIndex}
-        className={cn('absolute inset-0', dark && PDF_PAGE_RASTER_DARK_CLASS)}
+        className={cn('pointer-events-none absolute inset-0', dark && PDF_PAGE_RASTER_DARK_CLASS)}
       />
       {overlays}
       <PdfLinkLayer
@@ -464,6 +467,6 @@ function PdfPage(props: {
         onSelect={(region) => onRegionSelect(pageNumber, region)}
       />
       <CommentCards marks={pageMarks} pageHeight={cssH} pageSize={pageSize} t={t} />
-    </div>
+    </PagePointerProvider>
   )
 }
