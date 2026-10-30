@@ -37,7 +37,7 @@ export function PdfToolbar({
                 size="icon-xs"
                 variant={translateOpen ? 'secondary' : 'ghost'}
                 aria-pressed={translateOpen}
-                aria-label={t('translateAll')}
+                aria-label={translateOpen ? t('showOriginal') : t('translateAll')}
                 onClick={onToggleTranslate}
               >
                 {translating ? (
@@ -47,7 +47,7 @@ export function PdfToolbar({
                 )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">{t('translateAll')}</TooltipContent>
+            <TooltipContent side="bottom">{translateOpen ? t('showOriginal') : t('translateAll')}</TooltipContent>
           </Tooltip>
         </div>
       </TooltipProvider>

@@ -17,6 +17,7 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "src/client/translation/MOTIF-LICENSE.txt",
     "lib/index.js",
     "lib/index.d.ts",
     "lib/index.js.map",

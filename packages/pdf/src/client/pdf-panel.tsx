@@ -1,5 +1,5 @@
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { cn } from './cn'
 import { EmbedReader, type SelectionHit } from './embed-reader'
 import type { EditableBookmark } from './bookmark'
@@ -7,6 +7,7 @@ import { type PdfPaperTone } from './page-theme'
 import { DEFAULT_HIGHLIGHT_COLOR, type HighlightColor } from './palette'
 import { PDF_FLOAT_CARD } from './pdf-chrome-surface'
 import { SelectionMenu } from './selection-menu'
+import { TranslateCard } from './translate-card'
 
 export interface PaintRect {
   x: number
@@ -60,8 +61,9 @@ export interface PdfInjected {
   ask: (text: string) => Promise<void>
   /** Write the PDF outline back to the file; resolves after the host saved it. */
   saveBookmarks: (ref: string, nodes: EditableBookmark[]) => Promise<void>
+  loadLayout: (ref: string, signal?: AbortSignal) => Promise<unknown>
   /** Translate one page's text; rejects with the host error message. */
-  translate: (text: string) => Promise<string>
+  translate: (text: string, signal?: AbortSignal) => Promise<string>
 }
 
 type PdfPanelProps =
@@ -81,6 +83,20 @@ interface MenuState {
   mode: 'actions' | 'comment' | 'ask'
 }
 
+/** One selection translation, kept alive while its floating card is pinned. */
+interface TranslateCardState {
+  anchor: { x: number, y: number }
+  page: number
+  /** Selection geometry, so the pinned chip stays on the page. */
+  rects: PdfRect[]
+  pageSize: PdfPageSize
+  pinned: boolean
+  visible: boolean
+  loading: boolean
+  result: string
+  error: string
+}
+
 export function paperRef(params: unknown): string {
   if (params === null || typeof params !== 'object' || !('ref' in params)) return ''
   const ref = params.ref
@@ -94,7 +110,7 @@ export function PdfTitle({ useTabInfo, t }: PropsRuntime<'sidebar.right.pane.tab
 }
 
 export function PdfPanel(props: PdfPanelProps): ReactNode {
-  const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, ask, saveBookmarks, translate } = props
+  const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, ask, saveBookmarks, translate, loadLayout } = props
   const paperPath = paperRef(useTabInfo().tab.navigation.params)
   const [status, setStatus] = useState<'empty' | 'loading' | 'missing' | 'error' | 'ready'>('empty')
   const [message, setMessage] = useState('')
@@ -106,6 +122,11 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
   const [busy, setBusy] = useState(false)
   const [selectionClearVersion, setSelectionClearVersion] = useState(0)
   const [pdfTone, setPdfTone] = useState<PdfPaperTone>('white')
+  const [translateCard, setTranslateCard] = useState<TranslateCardState | undefined>(undefined)
+  /** Invalidates a late translation response after close / reselect. */
+  const translateRun = useRef(0)
+
+  useEffect(() => () => { translateRun.current += 1 }, [])
 
   const onSelect = useCallback((hit: SelectionHit) => {
     setDraft('')
@@ -132,6 +153,8 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     setMarks([])
     setMenu(undefined)
     setBanner('')
+    setTranslateCard(undefined)
+    translateRun.current += 1
     if (paperPath === '') {
       setStatus('empty')
       return () => { cancelled = true }
@@ -221,6 +244,52 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
     })
   }
 
+  /**
+   * Translate the selection into a card anchored next to it, like the motif
+   * translate card. The card, not a page-top banner, owns the result.
+   */
+  const openTranslate = (target: MenuState): void => {
+    const token = translateRun.current + 1
+    translateRun.current = token
+    setMenu(undefined)
+    setDraft('')
+    setTranslateCard({
+      anchor: { x: target.screenX, y: target.screenY },
+      page: target.page,
+      rects: target.rects,
+      pageSize: target.pageSize,
+      pinned: false,
+      visible: true,
+      loading: true,
+      result: '',
+      error: '',
+    })
+    void translate(target.quote).then((text) => {
+      if (token !== translateRun.current) return
+      setTranslateCard(prev => prev === undefined ? prev : { ...prev, loading: false, result: text })
+    }).catch((error: unknown) => {
+      if (token !== translateRun.current) return
+      const text = error instanceof Error ? error.message : ''
+      setTranslateCard(prev => prev === undefined
+        ? prev
+        : { ...prev, loading: false, error: text === '' ? t('translateFailed') : text })
+    })
+  }
+
+  const toggleTranslatePin = (): void => {
+    setTranslateCard(prev => prev === undefined
+      ? prev
+      : { ...prev, pinned: !prev.pinned, visible: true })
+  }
+
+  const closeTranslateCard = (): void => {
+    setTranslateCard((prev) => {
+      if (prev === undefined) return prev
+      // Pinned results stay behind as a small chip at the selection.
+      return prev.pinned ? { ...prev, visible: false } : undefined
+    })
+  }
+
   const selectionMenu = menu === undefined ? null : (
     <SelectionMenu
       screen={{ x: menu.screenX, y: menu.screenY }}
@@ -249,16 +318,7 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
         })
       }}
       onComment={() => { setMenu({ ...menu, mode: 'comment' }) }}
-      onTranslate={() => {
-        runMark({
-          ref: paperPath,
-          kind: 'translate',
-          quote: menu.quote,
-          page: menu.page,
-          rects: menu.rects,
-          pageSize: menu.pageSize,
-        })
-      }}
+      onTranslate={() => { openTranslate(menu) }}
       onAsk={() => { setMenu({ ...menu, mode: 'ask' }) }}
       onDraftChange={setDraft}
       onSubmitDraft={submitDraft}
@@ -289,6 +349,17 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
               selectionClearVersion={selectionClearVersion}
               saveBookmarks={(nodes) => saveBookmarks(paperPath, nodes)}
               translate={translate}
+              loadLayout={loadLayout}
+              translatePin={translateCard === undefined || !translateCard.pinned
+                ? undefined
+                : {
+                    page: translateCard.page,
+                    rects: translateCard.rects,
+                    pageSize: translateCard.pageSize,
+                    onOpen: (screen) => {
+                      setTranslateCard(prev => prev === undefined ? prev : { ...prev, anchor: screen, visible: true })
+                    },
+                  }}
               menu={selectionMenu}
               t={t}
             />
@@ -301,6 +372,18 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
   return (
     <div className="agentero-pdf agentero-surface flex h-full min-h-0 flex-col">
       {body}
+      {translateCard === undefined || !translateCard.visible ? null : (
+        <TranslateCard
+          anchor={translateCard.anchor}
+          result={translateCard.result}
+          error={translateCard.error}
+          loading={translateCard.loading}
+          pinned={translateCard.pinned}
+          onTogglePin={toggleTranslatePin}
+          onClose={closeTranslateCard}
+          t={t}
+        />
+      )}
     </div>
   )
 }

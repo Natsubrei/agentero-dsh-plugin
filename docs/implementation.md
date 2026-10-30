@@ -142,7 +142,7 @@ corepack pnpm dsh web --profile agentero --no-open
 | T7 | 文献写操作：导入、标签、回收站删除、BibTeX、发现、补下载、已读 | 代码已完成。删除只进回收站。没有单独的元数据改写命令，CLI 没有就不做 |
 | T8 | Host 注册给模型用的工具（列论文、导入、读笔记、搜索笔记、发现） | 代码已完成 |
 | T9 | 把插件装进 profile，配 Vault，用真实论文走通 | 已在 `web` profile 上走通文献列表、笔记渲染、PDF 翻页。标签增删已用接口验证并复原。BibTeX 导出和 arXiv 发现因 CLI 访问外网失败返回 502。卸插件和划词加入会话还没点 |
-| T10 | 版面侧栏、全文翻译、书签写回、导出带批注 PDF | 全文翻译（按页文本面板）、书签写回已完成；参考文献/图表面板和导出带批注 PDF 未做 |
+| T10 | 版面侧栏、全文翻译、书签写回、导出带批注 PDF | 全文翻译（模型翻译与页面内重排）、书签写回已完成；参考文献/图表面板和导出带批注 PDF 未做 |
 | T11 | Library 与 Agentero 桌面视觉对齐：紧凑表格、按需表单与标签编辑、菜单、错误 Toast | 已完成；在本机 DSH 验证搜索、空结果、排序、刷新保留滚动位置、菜单切换、标签输入焦点和已有 PDF 打开；本轮未执行导入、删除、标签写入等 Vault 数据变更 |
 | T12 | 推荐卡片条：arXiv 每日排序、知乎检索卡片、条内配置 | 已重做成输入框下方的卡片条，在 dsh 里验过 arXiv 缓存卡片、知乎检索和设置面板；arXiv 计算用假 Embedding 端到端验证 |
 | T13 | Library 选择知识库：原生选目录、手动路径、最近列表、持久化与旧来源保护 | 已实现；推荐请求、PDF 书签/翻译和批注图片一并绑定来源；按用户要求不做额外验证 |
@@ -284,10 +284,10 @@ Host 路由（`packages/host/src/recommend.ts`）：
 - `inject` 含 `agentero`、`sidebarRight`、`sidebarRightTabs`。打开器调用 `sidebarRight.openTab('agentero.pdf', { params: { ref } })`。正文用 `useTabInfo().tab.navigation.params` 读论文路径。
 - `GET /agentero/api/pdf?ref=` 拉字节。`ref` 以 `.pdf` 结尾时读该文件；否则把它当论文目录，优先 `<目录名>.pdf`，否则取直接子文件里按文件名排序的第一个 `.pdf`。
 - 阅读引擎是 EmbedPDF / PDFium，和桌面端同一套：先 worker，失败再 direct。`fontFallback` 为 `null`（桌面端的 CJK 回退走 Tauri）。wasm 从 `GET /agentero/api/pdfium.wasm` 取，绝对 URL 交给 worker。插件注册沿用文档、视口、单页 spread、纵向滚动、渲染、分块、适应宽度缩放、交互和文本选择。底栏、划词菜单、批注卡片和纸色仍用原来的界面。
-- 阅读器 chrome：⌘F 查找（Search 插件，全文档命中高亮、上一个/下一个）、左上目录（Bookmark 插件读取，增删改名后经 `POST /agentero/api/pdf/bookmarks` 用 pdf-lib 原子写回原 PDF）、右上工具栏的全文翻译（按页取 PDFium 文字，走 `POST /agentero/api/translate`，在右侧文本面板显示并后台预取其余页）。空格或中键拖动平移视口。Link annotation 由 Annotation 插件加载，再由自己的命中层接管：内部目标跳页，URI 打开新窗口。
+- 阅读器 chrome：⌘F 查找（Search 插件，全文档命中高亮、上一个/下一个）、左上目录（Bookmark 插件读取，增删改名后经 `POST /agentero/api/pdf/bookmarks` 用 pdf-lib 原子写回原 PDF）、右上工具栏的全文翻译（复用 Harness 模型，按 motif 字符/公式/样式提取与重排，在原页面逐段替换；详见 [页面内翻译](pdf-translation.md)）。空格或中键拖动平移视口。Link annotation 由 Annotation 插件加载，再由自己的命中层接管：内部目标跳页，URI 打开新窗口。
 - 还没有路径时显示「从文献库打开一篇论文」。
 - 声明 child `agentero.pdf.notes`。槽里没有内容时 PDF 占满宽度。
-- 划词菜单：复制、高亮、批注、翻译、加入对话、快速对话。选区来自 EmbedPDF selection，`getFormattedSelection` 顺带给出页点矩形，随 `POST /agentero/api/marks` 一起提交，所以高亮、批注和 ask 不再依赖 `agentero mark add` 重新定位引文。高亮写进 `marks/annotations.json`（EmbedPDF transfer 形状，2 空格 JSON + 尾换行、按 id 去重、原子替换），ask 写 `marks/<id>.json`，矩形按页面尺寸归一化成 0–1。翻译仍走 CLI，机器翻译引擎只在那边。
+- 划词菜单：复制、高亮、批注、翻译、加入对话、快速对话。选区来自 EmbedPDF selection，`getFormattedSelection` 顺带给出页点矩形，随 `POST /agentero/api/marks` 一起提交，所以高亮、批注和 ask 不再依赖 `agentero mark add` 重新定位引文。高亮写进 `marks/annotations.json`（EmbedPDF transfer 形状，2 空格 JSON + 尾换行、按 id 去重、原子替换），ask 写 `marks/<id>.json`，矩形按页面尺寸归一化成 0–1。翻译通过 Host 调用 Harness 模型，相关标注写入保持 motif 兼容。
 - 读标注走 `GET /agentero/api/marks?ref=`：Host 直接读 `marks/annotations.json` 和 `marks/*.json`，不再 `spawn agentero mark list`，也不再逐文件再发 `notes/file`。高亮颜色从 `custom.paletteKey` 读回并用于绘制。
 - 加入对话绑定 PDF 页所属的 `sessionId`，通过 Harness 的输入接口追加引用到对话草稿，保留已有文字、引用和附件，并聚焦输入框。快速对话通过该会话的 `conversation.send` 发送引用和问题，触发回复后再保存提问标注；标注保存失败不会阻止对话。发送失败保留问题供重试，不切换主面板。
 

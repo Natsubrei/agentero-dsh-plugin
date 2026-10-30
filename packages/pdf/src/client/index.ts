@@ -175,11 +175,22 @@ export function apply(ctx: Context): void {
       const parsed = await parseBody(response)
       if (!response.ok) throw new Error(errorText(parsed) ?? '')
     },
-    async translate(text) {
+    async loadLayout(ref, signal) {
+      const paper = ref.toLowerCase().endsWith('.pdf') ? ref.slice(0, ref.lastIndexOf('/')) : ref
+      const response = await request(`/agentero/api/notes/file?path=${encodeURIComponent(`${paper}/source/layout.json`)}`, { signal, cache: 'no-store' })
+      if (response.status === 404) return undefined
+      const body = await parseBody(response)
+      if (!response.ok) throw new Error(errorText(body) ?? 'Could not load PDF layout')
+      const text = envelopeData(body)?.text
+      if (typeof text !== 'string') return undefined
+      try { return JSON.parse(text) as unknown } catch { return undefined }
+    },
+    async translate(text, signal) {
       const response = await request('/agentero/api/translate', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ text, to: 'zh-CN' }),
+        signal,
         cache: 'no-store',
       })
       const parsed = await parseBody(response)

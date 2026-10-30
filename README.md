@@ -22,3 +22,5 @@ agentero-dsh-plugin/          # dsh.bundle、cordis.patch.yml、pnpm-workspace.y
 | `agentero-recommend` | `agentero-dsh-recommend` | 会话输入框下方的小卡片条：arXiv 每日推荐与知乎讨论，可折叠、可换分类 |
 
 文献、笔记出现在会话右栏的开始页（en: Library / Notes）。PDF 从文献行打开，不单独占一张卡片。推荐不占右栏，是会话输入框下方的一条卡片（en: Recommend）。四个界面包运行时不互相引用。本地搭建见 [CONTRIBUTING.md](CONTRIBUTING.md)。产品范围、已实现接口和后续步骤见 [docs/implementation.md](docs/implementation.md)。
+
+PDF 全文翻译直接在原页面替换段落，复用 Harness 配置的 DeepSeek 模型。配置、motif 算法迁移和限制见 [PDF 页面内翻译](docs/pdf-translation.md)。

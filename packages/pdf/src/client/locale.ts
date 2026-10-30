@@ -62,7 +62,13 @@ export const zh = {
   translating: '翻译中…',
   translation: '译文',
   translationEmpty: '这一页没有可翻译的文字',
-  translationFailed: '翻译失败',
+  translationFailed: '部分内容翻译失败，保留原文。',
+  translationRetry: '重试',
+  showOriginal: '显示原文',
+  translateFailed: '翻译失败',
+  pin: '钉住',
+  unpin: '取消钉住',
+  close: '关闭',
 }
 
 /** PDF panel copy, English. */
@@ -127,7 +133,13 @@ export const en: { [K in keyof typeof zh]: string } = {
   translating: 'Translating…',
   translation: 'Translation',
   translationEmpty: 'No text to translate on this page',
-  translationFailed: 'Translation failed',
+  translationFailed: 'Some regions could not be translated; original text is shown.',
+  translationRetry: 'Retry',
+  showOriginal: 'Show original',
+  translateFailed: 'Translation failed',
+  pin: 'Pin',
+  unpin: 'Unpin',
+  close: 'Close',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {

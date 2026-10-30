@@ -46,7 +46,9 @@ import { PdfLinkLayer } from './link-layer'
 import { PdfOutlineLayer } from './outline'
 import { PanDragHandler } from './pan-handler'
 import { PdfToolbar } from './pdf-toolbar'
-import { PdfTranslatePanel } from './translate-panel'
+import { PageTranslationOverlay } from './translation/page-overlay'
+import { usePageTranslation, type TranslatedPage } from './translation/use-page-translation'
+import { Button } from './button'
 import {
   PDF_PAGE_RASTER_DARK_CLASS,
   PDF_PAPER_SHELL_CLASS,
@@ -54,7 +56,9 @@ import {
 } from './page-theme'
 import { PdfBottomBar } from './pdf-bottom-bar'
 import { DEFAULT_HIGHLIGHT_COLOR, highlightFill } from './palette'
-import type { PaintMark, PdfRect } from './pdf-panel'
+import { PDF_FLOAT_CARD } from './pdf-chrome-surface'
+import type { PaintMark, PdfPageSize, PdfRect } from './pdf-panel'
+import { TranslateCardPin } from './translate-card'
 import { PDF_ZOOM_MAX, PDF_ZOOM_MIN } from './zoom'
 
 /** Marks a rendered page so the selection menu can map page points to the screen. */
@@ -86,7 +90,15 @@ interface EmbedReaderProps {
   /** Persist the outline back into the PDF; resolves after the host wrote it. */
   saveBookmarks: (nodes: EditableBookmark[]) => Promise<void>
   /** Translate one page's text through the host. */
-  translate: (text: string) => Promise<string>
+  translate: (text: string, signal?: AbortSignal) => Promise<string>
+  loadLayout: (ref: string, signal?: AbortSignal) => Promise<unknown>
+  /** Pinned translation chip, drawn inside the page so it scrolls with it. */
+  translatePin?: {
+    page: number
+    rects: PdfRect[]
+    pageSize: PdfPageSize
+    onOpen: (screen: { x: number, y: number }) => void
+  }
   menu: ReactNode
   /** Increment after a mark is saved so the blue selection does not cover it. */
   selectionClearVersion: number
@@ -178,7 +190,7 @@ export function EmbedReader(props: EmbedReaderProps): ReactNode {
 type ReaderChromeProps = EmbedReaderProps & { engine: PdfEngine }
 
 function ReaderChrome(props: ReaderChromeProps): ReactNode {
-  const { docId, marks, pdfTone, onSetPdfTone, onSelect, onDeselect, saveBookmarks, translate, menu, selectionClearVersion, engine, t } = props
+  const { docId, marks, pdfTone, onSetPdfTone, onSelect, onDeselect, saveBookmarks, translate, loadLayout, translatePin, menu, selectionClearVersion, engine, t } = props
   const hostRef = useRef<HTMLDivElement>(null)
   const pageFocusedRef = useRef(false)
   const [pageField, setPageField] = useState('1')
@@ -260,15 +272,14 @@ function ReaderChrome(props: ReaderChromeProps): ReactNode {
     scroll.provides?.scrollToPage({ pageNumber: next })
   }
 
-  const translatePage = useCallback(async (pageIndex: number): Promise<string> => {
-    const document = documentStateRef.current?.document
-    const pageInfo = document?.pages[pageIndex]
-    if (engine === undefined || document === null || document === undefined || pageInfo === undefined) return ''
-    const rects = await engine.getPageTextRects(document, pageInfo).toPromise()
-    const text = rects.map((rect) => rect.content).join(' ').replace(/\s+/g, ' ').trim()
-    if (text === '') return ''
-    return translate(text)
-  }, [engine, translate])
+  const translation = usePageTranslation({
+    open: translateOpen,
+    currentPage: Math.max(1, page),
+    document: documentState?.document,
+    engine,
+    loadLayout: signal => loadLayout(docId, signal),
+    translate,
+  })
 
   const renderPage = useCallback((layout: PageLayout) => (
     <PdfPage
@@ -276,9 +287,11 @@ function ReaderChrome(props: ReaderChromeProps): ReactNode {
       layout={layout}
       marks={marks}
       pdfTone={pdfTone}
+      translation={translateOpen ? translation.pages.get(layout.pageIndex) : undefined}
+      translatePin={translatePin}
       t={t}
     />
-  ), [docId, marks, pdfTone, t])
+  ), [docId, marks, pdfTone, t, translateOpen, translation.pages, translatePin])
 
   return (
     <div className="relative h-full min-h-0">
@@ -295,19 +308,22 @@ function ReaderChrome(props: ReaderChromeProps): ReactNode {
       {menu}
       <PdfFindLayer docId={docId} hostRef={hostRef} t={t} />
       <PdfToolbar
-        translating={false}
+        translating={translateOpen && translation.running}
         translateOpen={translateOpen}
-        onToggleTranslate={() => setTranslateOpen((value) => !value)}
+        onToggleTranslate={() => {
+          selection?.forDocument(docId).clear()
+          onDeselect()
+          setTranslateOpen(value => !value)
+        }}
         t={t}
       />
-      <PdfTranslatePanel
-        open={translateOpen}
-        page={Math.max(page, 1)}
-        total={Math.max(total, 1)}
-        translate={translatePage}
-        onClose={() => setTranslateOpen(false)}
-        t={t}
-      />
+      {translateOpen && (translation.error || (!translation.running && translation.pages.get(Math.max(0, page - 1))?.source.paragraphs.length === 0)) ? (
+        <div data-pdf-chrome role="status" className={cn('absolute top-12 right-3 z-30 max-w-80 p-2 text-xs', PDF_FLOAT_CARD)}>
+          {translation.error ? <>{t('translationFailed')} {translation.error}
+            <Button size="sm" variant="ghost" onClick={translation.retry}>{t('translationRetry')}</Button>
+          </> : t('translationEmpty')}
+        </div>
+      ) : null}
       <PdfOutlineLayer
         docId={docId}
         currentPage={Math.max(page, 1)}
@@ -336,9 +352,11 @@ function PdfPage(props: {
   layout: PageLayout
   marks: readonly PaintMark[]
   pdfTone: PdfPaperTone
+  translation: TranslatedPage | undefined
+  translatePin: EmbedReaderProps['translatePin']
   t: PdfT
 }): ReactNode {
-  const { documentId, layout, marks, pdfTone, t } = props
+  const { documentId, layout, marks, pdfTone, translation, translatePin, t } = props
   const documentState = useDocumentState(documentId)
   const size = documentState?.document?.pages[layout.pageIndex]?.size
   const cssW = layout.rotatedWidth || layout.width
@@ -350,6 +368,15 @@ function PdfPage(props: {
     height: size?.height && size.height > 0 ? size.height : cssH,
   }
   const dark = pdfTone === 'dark'
+  const pinRect = translatePin !== undefined && translatePin.page === pageNumber
+    ? translatePin.rects[0]
+    : undefined
+  const pinX = pinRect !== undefined && translatePin !== undefined && translatePin.pageSize.width > 0
+    ? (pinRect.origin.x + pinRect.size.width) / translatePin.pageSize.width
+    : 0
+  const pinY = pinRect !== undefined && translatePin !== undefined && translatePin.pageSize.height > 0
+    ? pinRect.origin.y / translatePin.pageSize.height
+    : 0
   const overlays = pageMarks.flatMap(mark => mark.rects.map((rect, index) => {
     const x = mark.space === 'pt' ? rect.x / pageSize.width : rect.x
     const y = mark.space === 'pt' ? rect.y / pageSize.height : rect.y
@@ -399,7 +426,11 @@ function PdfPage(props: {
       />
       <PdfSearchLayer docId={documentId} pageIndex={layout.pageIndex} />
       <SelectionLayer documentId={documentId} pageIndex={layout.pageIndex} />
+      <PageTranslationOverlay state={translation} width={cssW} height={cssH} tone={pdfTone} />
       <CommentCards marks={pageMarks} pageHeight={cssH} pageSize={pageSize} t={t} />
+      {pinRect === undefined || translatePin === undefined ? null : (
+        <TranslateCardPin x={pinX} y={pinY} onOpen={translatePin.onOpen} t={t} />
+      )}
     </PagePointerProvider>
   )
 }

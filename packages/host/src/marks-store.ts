@@ -60,7 +60,7 @@ export type MarksReadResult =
 
 export interface MarkWrite {
   ref: string
-  kind: 'highlight' | 'ask' | 'visual'
+  kind: 'highlight' | 'ask' | 'translate' | 'visual'
   quote: string
   page: number
   /** Page-point rectangles from the browser selection. */
@@ -70,6 +70,8 @@ export interface MarkWrite {
   color?: string
   comment?: string
   question?: string
+  /** Completed model translation, persisted in the desktop-compatible mark. */
+  result?: string
   /** Visual region crops: bare base64 PNG, stored under marks/assets. */
   asset?: { mediaType: string, data: string }
 }
@@ -352,6 +354,28 @@ export async function writeMark(vault: string, body: MarkWrite): Promise<MarksWr
     w: clamp01(rect.w / width),
     h: clamp01(rect.h / height),
   }))
+
+  if (body.kind === 'translate') {
+    const result = body.result?.trim() ?? ''
+    if (result === '') return { ok: false, status: 400, error: 'translation is empty' }
+    const id = newMarkId()
+    const mark = {
+      version: 1,
+      kind: 'translate',
+      id,
+      paperPath: paper.dir.relative,
+      createdAt: now,
+      updatedAt: now,
+      page: body.page,
+      rects: geometry,
+      quote,
+      result,
+      geometry: 'resolved',
+    }
+    await mkdir(dir, { recursive: true })
+    await writeFile(path.join(dir, `${id}.json`), `${JSON.stringify(mark, null, 2)}\n`, 'utf8')
+    return { ok: true, ids: [id], path: `${paper.dir.relative}/marks/${id}.json` }
+  }
 
   if (body.kind === 'visual') {
     const asset = body.asset

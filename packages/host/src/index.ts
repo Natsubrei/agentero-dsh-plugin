@@ -17,6 +17,7 @@ import { bookmarkNodesFrom, writePdfBookmarks } from './bookmarks-write.js'
 import { locateVaultPdf, readVaultPdf } from './pdf-file.js'
 import { handleRecommendRequest } from './recommend.js'
 import { registerTools } from './tools.js'
+import { createTranslator, translationTarget, type TranslateText, type TranslationLlm, type DefaultTranslationModel } from './translate.js'
 import { selectVault, vaultInfo, vaultScope } from './vault.js'
 
 /** Cordis plugin name. The loader row id matches this name. */
@@ -35,6 +36,11 @@ export interface Config {
   agenteroSettings: string
   /** Last selected knowledge bases in this DSH profile. */
   recentVaults: string[]
+  /** Optional registered Harness route; both fields must be supplied together. */
+  translationProvider: string
+  translationModel: string
+  translationSystemPrompt: string
+  translationUserPrompt: string
 }
 
 export const Config = z.object({
@@ -42,6 +48,10 @@ export const Config = z.object({
   agenteroBin: z.string().default('agentero'),
   agenteroSettings: z.string().default(''),
   recentVaults: z.array(z.string()).default([]),
+  translationProvider: z.string().default(''),
+  translationModel: z.string().default(''),
+  translationSystemPrompt: z.string().default(''),
+  translationUserPrompt: z.string().default(''),
 })
 
 /** Prefix owned by this plugin. Longer paths under it are answered here. */
@@ -69,7 +79,7 @@ const require = createRequire(import.meta.url)
 const MARKS_PATH = '/agentero/api/marks'
 /** Serve the PNG crop behind a visual region mark. */
 const MARK_ASSET_PATH = '/agentero/api/marks/asset'
-/** Translate text with the CLI's free machine translation. */
+/** Translate PDF text with a one-shot Harness model call. */
 const TRANSLATE_PATH = '/agentero/api/translate'
 
 /** Queue a citation into the still-selected dsh session. */
@@ -102,8 +112,6 @@ const PAPER_LIST_TIMEOUT_MS = 20_000
 
 /** `mark add` may run PDFium and a translation request. */
 const MARK_ADD_TIMEOUT_MS = 90_000
-/** Free machine translation of one page. */
-const TRANSLATE_TIMEOUT_MS = 60_000
 
 /** Largest JSON body accepted by `PUT /agentero/api/notes/file`. */
 const NOTE_BODY_LIMIT = 8 * 1024 * 1024
@@ -114,6 +122,10 @@ function settingsFrom(config: unknown): Config {
     vault: typeof raw.vault === 'string' ? raw.vault : '',
     agenteroBin: typeof raw.agenteroBin === 'string' ? raw.agenteroBin : 'agentero',
     agenteroSettings: typeof raw.agenteroSettings === 'string' ? raw.agenteroSettings : '',
+    translationProvider: typeof raw.translationProvider === 'string' ? raw.translationProvider : '',
+    translationModel: typeof raw.translationModel === 'string' ? raw.translationModel : '',
+    translationSystemPrompt: typeof raw.translationSystemPrompt === 'string' ? raw.translationSystemPrompt : '',
+    translationUserPrompt: typeof raw.translationUserPrompt === 'string' ? raw.translationUserPrompt : '',
     recentVaults: Array.isArray(raw.recentVaults) ? raw.recentVaults.filter((value): value is string => typeof value === 'string') : [],
   }
 }
@@ -585,6 +597,7 @@ async function handleMarks(
   req: IncomingMessage,
   res: ServerResponse,
   children: Set<ChildProcess>,
+  translate: TranslateText,
 ): Promise<void> {
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.statusCode = 405
@@ -618,10 +631,15 @@ async function handleMarks(
     sendJson(res, 400, { error: 'invalid body' })
     return
   }
-  // A browser selection already knows its page rectangles, so the mark is
-  // written here instead of re-locating the quote through the CLI. Translation
-  // still needs the CLI's machine-translation engines.
-  if (body.kind !== 'translate' && body.rects !== undefined && body.pageSize !== undefined) {
+  if (body.kind === 'translate' && (body.rects === undefined || body.pageSize === undefined || body.quote.length > 20_000)) {
+    sendJson(res, 400, { error: 'translation requires selection rectangles, page size, and at most 20000 characters' })
+    return
+  }
+  // Browser selections already contain exact geometry; do not re-locate through the CLI.
+  if (body.rects !== undefined && body.pageSize !== undefined) {
+    const result = body.kind === 'translate'
+      ? await translateForResponse(translate, body.quote, translationTarget(body.to), res)
+      : undefined
     const written = await writeMark(settings.vault, {
       ref: body.ref,
       kind: body.kind,
@@ -629,6 +647,7 @@ async function handleMarks(
       page: body.page,
       rects: body.rects,
       pageSize: body.pageSize,
+      ...(result === undefined ? {} : { result }),
       ...(body.color === undefined ? {} : { color: body.color }),
       ...(body.comment === undefined ? {} : { comment: body.comment }),
       ...(body.question === undefined ? {} : { question: body.question }),
@@ -638,7 +657,7 @@ async function handleMarks(
       sendJson(res, written.status, { error: written.error })
       return
     }
-    sendJson(res, 200, { ok: true, ids: written.ids, path: written.path })
+    sendJson(res, 200, { ok: true, ids: written.ids, path: written.path, ...(result === undefined ? {} : { marks: [{ result }] }) })
     return
   }
   const args = [
@@ -707,12 +726,25 @@ async function handleMarkAsset(
   res.end(await readFile(real))
 }
 
-/** Translate text through the CLI's free machine translation engines. */
+/** Cancel a model call when its HTTP consumer disconnects. */
+async function translateForResponse(translate: TranslateText, text: string, target: string, res: ServerResponse): Promise<string> {
+  const controller = new AbortController()
+  const abort = (): void => { controller.abort() }
+  res.once('close', abort)
+  try {
+    if (res.destroyed) controller.abort()
+    return await translate(text, target, controller.signal)
+  } finally {
+    res.off('close', abort)
+  }
+}
+
+/** Translate text directly through the Harness model service. */
 async function handleTranslate(
   settings: Config,
   req: IncomingMessage,
   res: ServerResponse,
-  children: Set<ChildProcess>,
+  translate: TranslateText,
 ): Promise<void> {
   if (!requirePost(req, res) || !requireVault(settings, res)) return
   const body = await readObject(req, res)
@@ -722,15 +754,9 @@ async function handleTranslate(
     sendJson(res, 400, { error: 'invalid body' })
     return
   }
-  const requested = typeof body.to === 'string' ? body.to.trim() : ''
-  const to = /^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})?$/.test(requested) ? requested : 'zh-CN'
-  const result = await runAgentero(
-    settings.agenteroBin,
-    ['--vault', settings.vault, '--json', 'translate', text, '--to', to],
-    TRANSLATE_TIMEOUT_MS,
-    children,
-  )
-  await finishCliJson(res, result, 'agentero translate')
+  const to = translationTarget(body.to)
+  const translated = await translateForResponse(translate, text, to, res)
+  sendJson(res, 200, { text: translated, sourceLang: 'auto', targetLang: to })
 }
 
 function contextFrom(raw: string): { sessionId: string, text: string } | undefined {
@@ -968,6 +994,7 @@ async function handleApi(
   res: ServerResponse,
   children: Set<ChildProcess>,
   vaultHost: VaultHost,
+  translate: TranslateText,
 ): Promise<void> {
   if (!isLoopbackHost(req.headers.host)) {
     res.statusCode = 403
@@ -1045,7 +1072,7 @@ async function handleApi(
     return
   }
   if (pathname === MARKS_PATH) {
-    await handleMarks(settings, req, res, children)
+    await handleMarks(settings, req, res, children, translate)
     return
   }
   if (pathname === MARK_ASSET_PATH) {
@@ -1053,7 +1080,7 @@ async function handleApi(
     return
   }
   if (pathname === TRANSLATE_PATH) {
-    await handleTranslate(settings, req, res, children)
+    await handleTranslate(settings, req, res, translate)
     return
   }
   if (pathname === CONTEXT_PATH) {
@@ -1131,10 +1158,15 @@ export function apply(ctx: Context, config?: unknown): void {
   ctx.effect(() => {
     console.log('[agentero] plugin loaded')
     const children = new Set<ChildProcess>()
+    const lifetime = new AbortController()
+    const modelTranslate = createTranslator(settings,
+      () => ctx.get('llm') as TranslationLlm | undefined,
+      () => ctx.get('agentDefaultModel') as DefaultTranslationModel | undefined)
+    const translate: TranslateText = (text, target, signal) => modelTranslate(text, target, AbortSignal.any([signal, lifetime.signal]))
     const route: WebRoute = {
       kind: 'prefix',
       path: API_PREFIX,
-      handler: (req, res) => handleApi(settings, agents, req, res, children, vaultHost).catch((error: unknown) => {
+      handler: (req, res) => handleApi(settings, agents, req, res, children, vaultHost, translate).catch((error: unknown) => {
         if (res.headersSent) return
         const message = error instanceof Error ? error.message : String(error)
         sendJson(res, 502, { error: message })
@@ -1143,6 +1175,7 @@ export function apply(ctx: Context, config?: unknown): void {
     const disposeTools = registerTools(ctx, settings, children)
     const dispose = ctx.webServer.register(route)
     return () => {
+      lifetime.abort()
       disposeTools()
       dispose()
       for (const child of children) {
