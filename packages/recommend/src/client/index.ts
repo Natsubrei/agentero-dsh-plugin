@@ -216,8 +216,9 @@ export function apply(ctx: Context): void {
         body: '{}',
       }))
     },
-    async loadArxiv(): Promise<ArxivRecommendResult | null> {
-      return arxivFrom(await request('/arxiv'))
+    async loadArxiv(categories: string[]): Promise<ArxivRecommendResult | null> {
+      const params = new URLSearchParams({ categories: categories.join(',') })
+      return arxivFrom(await request(`/arxiv?${params.toString()}`))
     },
     async recommendArxiv(categories: string[]): Promise<ArxivRecommendResult> {
       const result = arxivFrom(await request('/arxiv', {

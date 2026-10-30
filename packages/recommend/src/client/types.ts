@@ -62,7 +62,7 @@ export interface RecommendFace {
   loadSettings(): Promise<SettingsView>
   saveSettings(patch: SettingsPatch): Promise<SettingsView>
   probeEmbedding(): Promise<ProbeResult>
-  loadArxiv(): Promise<ArxivRecommendResult | null>
+  loadArxiv(categories: string[]): Promise<ArxivRecommendResult | null>
   recommendArxiv(categories: string[]): Promise<ArxivRecommendResult>
   searchZhihu(query: string, count?: number): Promise<ZhihuSearchItem[]>
   importPaper(text: string): Promise<void>

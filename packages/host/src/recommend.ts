@@ -353,10 +353,18 @@ function runKey(model: string, categories: string[], topN: number): string {
   return createHash('sha256').update(`arxiv|${model}|${topN}|${normalized}`).digest('hex')
 }
 
-function latestSameDay(cache: CacheFile): ArxivRecommendResult | undefined {
-  const entries = Object.values(cache.runs).sort((a, b) => b.computedAt.localeCompare(a.computedAt))
-  const latest = entries[0]
-  return latest !== undefined && fresh(latest.result) ? latest.result : undefined
+function sameCategories(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false
+  const normalizedRight = new Set(right.map(category => category.toLowerCase()))
+  return left.every(category => normalizedRight.has(category.toLowerCase()))
+}
+
+function latestSameDay(cache: CacheFile, categories?: string[]): ArxivRecommendResult | undefined {
+  const entries = Object.values(cache.runs)
+    .filter(entry => fresh(entry.result))
+    .filter(entry => categories === undefined || categories.length === 0 || sameCategories(entry.result.categories, categories))
+    .sort((a, b) => b.computedAt.localeCompare(a.computedAt))
+  return entries[0]?.result
 }
 
 function decodeXml(input: string): string {
@@ -388,14 +396,24 @@ function itemLink(item: string): string {
   return decodeXml(match?.[1] ?? match?.[2] ?? '').trim()
 }
 
+function stripLabeledPrefix(text: string, label: string): string | undefined {
+  const lower = text.toLowerCase()
+  if (!lower.startsWith(label)) return undefined
+  const after = text.slice(label.length).trimStart()
+  if (label === 'abstract:') return after
+  const whitespace = after.search(/\s/)
+  return after.slice(whitespace === -1 ? after.length : whitespace).trimStart()
+}
+
 function cleanAbstract(input: string): string {
   let text = stripHtml(decodeXml(input))
-  const labels = ['arxiv:', 'announce type:', 'comments:', 'subjects:', 'journal-ref:', 'report-no:', 'abstract:']
+  const labels = ['arxiv:', 'announce type:', 'comments:', 'subjects:', 'journal-ref:', 'report-no:', 'license:', 'abstract:']
   for (let changed = true; changed;) {
     changed = false
     for (const label of labels) {
-      if (text.toLowerCase().startsWith(label)) {
-        text = text.slice(label.length).trim()
+      const next = stripLabeledPrefix(text, label)
+      if (next !== undefined) {
+        text = next
         changed = true
       }
     }
@@ -485,6 +503,15 @@ function dot(left: number[], right: number[]): number {
   return sum
 }
 
+function isBatchRejection(status: number, body: string): boolean {
+  if (status !== 400 && status !== 413 && status !== 422) return false
+  const lower = body.toLowerCase()
+  return lower.includes('batch')
+    || lower.includes('too many input')
+    || lower.includes('too many text')
+    || lower.includes('maximum number of')
+}
+
 async function embedBatch(
   endpoint: string,
   apiKey: string | undefined,
@@ -507,7 +534,7 @@ async function embedBatch(
   }
   if (!response.ok) {
     const body = await response.text().catch(() => '')
-    if (texts.length > 1 && (response.status === 400 || response.status === 413 || response.status === 422)) {
+    if (texts.length > 1 && isBatchRejection(response.status, body)) {
       const middle = Math.ceil(texts.length / 2)
       const left = await embedBatch(endpoint, apiKey, model, texts.slice(0, middle))
       const right = await embedBatch(endpoint, apiKey, model, texts.slice(middle))
@@ -551,6 +578,45 @@ async function embedAll(
     out.push(...await embedBatch(endpoint, apiKey, model, chunk))
   }
   return out
+}
+
+/** Raw vectors kept for this host process so a refresh does not re-embed the corpus. */
+const vectorMemo = new Map<string, number[]>()
+const VECTOR_MEMO_LIMIT = 5_000
+
+function memoKey(model: string, text: string): string {
+  return `${model}\0${createHash('sha256').update(text).digest('hex')}`
+}
+
+async function embedAllMemo(
+  endpoint: string,
+  apiKey: string | undefined,
+  model: string,
+  texts: string[],
+): Promise<number[][]> {
+  const keys = texts.map(text => memoKey(model, text))
+  const missing = new Map<string, string>()
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]
+    const text = texts[index]
+    if (key === undefined || text === undefined || vectorMemo.has(key) || missing.has(key)) continue
+    missing.set(key, text)
+  }
+  if (missing.size > 0) {
+    const missingKeys = [...missing.keys()]
+    const vectors = await embedAll(endpoint, apiKey, model, [...missing.values()])
+    for (let index = 0; index < missingKeys.length; index += 1) {
+      const key = missingKeys[index]
+      const vector = vectors[index]
+      if (key === undefined || vector === undefined) continue
+      vectorMemo.set(key, vector)
+      if (vectorMemo.size > VECTOR_MEMO_LIMIT) {
+        const oldest = vectorMemo.keys().next().value
+        if (oldest !== undefined) vectorMemo.delete(oldest)
+      }
+    }
+  }
+  return keys.map(key => vectorMemo.get(key) ?? [])
 }
 
 async function corpusTexts(settings: RecommendHostSettings, children: Set<ChildProcess>): Promise<string[]> {
@@ -605,7 +671,7 @@ async function recommendArxiv(
   const cache = await readCache()
 
   if (runtime.embedding === undefined) {
-    const stored = latestSameDay(cache)
+    const stored = latestSameDay(cache, resolvedCategories)
     if (!force && stored !== undefined) return { ...stored, reusedCache: true }
     throw new Error('recommend.no_embedding')
   }
@@ -622,9 +688,9 @@ async function recommendArxiv(
   const endpoint = resolveEmbeddingEndpoint(runtime.embedding.baseUrl)
   if (endpoint === '') throw new Error('recommend.no_embedding')
 
-  const corpusVectors = (await embedAll(endpoint, runtime.embedding.apiKey, runtime.embedding.model, corpus))
+  const corpusVectors = (await embedAllMemo(endpoint, runtime.embedding.apiKey, runtime.embedding.model, corpus))
     .map(normalizeVector)
-  const candidateVectors = (await embedAll(
+  const candidateVectors = (await embedAllMemo(
     endpoint,
     runtime.embedding.apiKey,
     runtime.embedding.model,
@@ -863,8 +929,11 @@ export async function handleRecommendRequest(
 
     if (route === '/arxiv') {
       if (req.method === 'GET') {
+        const requested = normalizeCategories(
+          url.searchParams.getAll('categories').flatMap(value => value.split(',')),
+        )
         const cache = await readCache()
-        sendJson(res, 200, { result: latestSameDay(cache) ?? null })
+        sendJson(res, 200, { result: latestSameDay(cache, requested) ?? null })
         return true
       }
       if (req.method === 'POST') {

@@ -295,7 +295,10 @@ export function RecommendPanel({
         setSettingsError('')
       })
       .catch((error: unknown) => {
-        if (!cancelled) setSettingsError(messageOf(error))
+        if (cancelled) return
+        const message = messageOf(error)
+        setSettingsError(message)
+        setArxivMessage(message)
       })
     return () => { cancelled = true }
   }, [loadSettings])
@@ -308,7 +311,7 @@ export function RecommendPanel({
     try {
       await probeEmbedding()
       if (!force) {
-        const stored = await loadArxiv()
+        const stored = await loadArxiv(nextCategories)
         if (stored !== null) {
           setArxivResult(stored)
           setArxivMessage('')
@@ -524,7 +527,7 @@ export function RecommendPanel({
   }
 
   return (
-    <div className='agentero-recommend agentero-surface box-border flex h-full min-h-0 min-w-0 flex-col font-sans text-foreground'>
+    <div className='agentero-recommend agentero-surface box-border flex h-full min-h-0 min-w-0 flex-col font-sans text-foreground [&_*]:box-border'>
       <div className='flex shrink-0 items-center gap-1 border-b px-2.5 py-1.5'>
         <button
           type='button'
@@ -701,6 +704,11 @@ export function RecommendPanel({
             {banner !== '' ? (
               <p className='mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive'>
                 {banner}
+              </p>
+            ) : null}
+            {arxivMessage !== '' && hasArxivResult ? (
+              <p className='mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive'>
+                {shown(arxivMessage, t)}
               </p>
             ) : null}
             {arxivBody}
