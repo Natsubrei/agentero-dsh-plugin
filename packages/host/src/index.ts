@@ -4,7 +4,7 @@ import { lstat, readFile, realpath, rename, rm, writeFile } from 'node:fs/promis
 import type { ChildProcess } from 'node:child_process'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import { cliFailure, runAgentero } from './cli-run.js'
@@ -26,16 +26,20 @@ export const name = 'agentero-host'
 /** HTTP routes are registered on the composition web server. `agents` cites into a session. `tools` exposes the vault to the model. */
 export const inject = ['webServer', 'agents', 'tools', 'settings']
 
-/** Optional host settings. Omitted fields use the defaults below. */
+/**
+ * Optional host settings. Omitted fields use the defaults below. The three
+ * live fields arrive as references so the Plugins page can edit them without
+ * remounting this plugin.
+ */
 export interface Config {
   /** Vault directory. Empty until a later step opens it. */
-  vault: string
+  vault: Volatile<string>
   /** Executable name used to reach the Agentero CLI. */
-  agenteroBin: string
+  agenteroBin: Volatile<string>
   /** Agentero desktop settings file. Empty resolves `$XDG_CONFIG_HOME/agentero/settings.json`. */
   agenteroSettings: string
   /** Last selected knowledge bases in this DSH profile. */
-  recentVaults: string[]
+  recentVaults: Volatile<string[]>
   /** Optional registered Harness route; both fields must be supplied together. */
   translationProvider: string
   translationModel: string
@@ -44,15 +48,27 @@ export interface Config {
 }
 
 export const Config = z.object({
-  vault: z.string().default(''),
-  agenteroBin: z.string().default('agentero'),
+  vault: z.string().default('').volatile(),
+  agenteroBin: z.string().default('agentero').volatile(),
   agenteroSettings: z.string().default(''),
-  recentVaults: z.array(z.string()).default([]),
+  recentVaults: z.array(z.string()).default([]).volatile(),
   translationProvider: z.string().default(''),
   translationModel: z.string().default(''),
   translationSystemPrompt: z.string().default(''),
   translationUserPrompt: z.string().default(''),
 })
+
+/** Plain values every handler reads; live fields delegate to their references. */
+interface HostSettings {
+  readonly vault: string
+  readonly agenteroBin: string
+  readonly agenteroSettings: string
+  readonly recentVaults: string[]
+  readonly translationProvider: string
+  readonly translationModel: string
+  readonly translationSystemPrompt: string
+  readonly translationUserPrompt: string
+}
 
 /** Prefix owned by this plugin. Longer paths under it are answered here. */
 const API_PREFIX = '/agentero/api'
@@ -116,17 +132,36 @@ const MARK_ADD_TIMEOUT_MS = 90_000
 /** Largest JSON body accepted by `PUT /agentero/api/notes/file`. */
 const NOTE_BODY_LIMIT = 8 * 1024 * 1024
 
-function settingsFrom(config: unknown): Config {
+/** Read a loader value; a field declared volatile arrives as a live reference. */
+function liveValue(value: unknown): unknown {
+  if (value !== null && typeof value === 'object' && typeof (value as Volatile<unknown>).get === 'function') {
+    return (value as Volatile<unknown>).get()
+  }
+  return value
+}
+
+function settingsFrom(config: unknown): HostSettings {
   const raw = config !== null && typeof config === 'object' ? config as Record<string, unknown> : {}
+  const text = (key: string, fallback: string): string => {
+    const value = liveValue(raw[key])
+    return typeof value === 'string' ? value : fallback
+  }
+  const strings = (key: string): string[] => {
+    const value = liveValue(raw[key])
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  }
   return {
-    vault: typeof raw.vault === 'string' ? raw.vault : '',
-    agenteroBin: typeof raw.agenteroBin === 'string' ? raw.agenteroBin : 'agentero',
-    agenteroSettings: typeof raw.agenteroSettings === 'string' ? raw.agenteroSettings : '',
-    translationProvider: typeof raw.translationProvider === 'string' ? raw.translationProvider : '',
-    translationModel: typeof raw.translationModel === 'string' ? raw.translationModel : '',
-    translationSystemPrompt: typeof raw.translationSystemPrompt === 'string' ? raw.translationSystemPrompt : '',
-    translationUserPrompt: typeof raw.translationUserPrompt === 'string' ? raw.translationUserPrompt : '',
-    recentVaults: Array.isArray(raw.recentVaults) ? raw.recentVaults.filter((value): value is string => typeof value === 'string') : [],
+    get vault() { return text('vault', '') },
+    get agenteroBin() {
+      const value = text('agenteroBin', 'agentero').trim()
+      return value === '' ? 'agentero' : value
+    },
+    get agenteroSettings() { return text('agenteroSettings', '') },
+    get recentVaults() { return strings('recentVaults') },
+    get translationProvider() { return text('translationProvider', '') },
+    get translationModel() { return text('translationModel', '') },
+    get translationSystemPrompt() { return text('translationSystemPrompt', '') },
+    get translationUserPrompt() { return text('translationUserPrompt', '') },
   }
 }
 
@@ -265,14 +300,14 @@ function textFromBody(raw: string): string | undefined {
   }
 }
 
-function requireVault(settings: Config, res: ServerResponse): boolean {
+function requireVault(settings: HostSettings, res: ServerResponse): boolean {
   if (settings.vault !== '') return true
   sendJson(res, 503, { error: 'vault is not configured' })
   return false
 }
 
 async function handlePapers(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
   children: Set<ChildProcess>,
@@ -303,7 +338,7 @@ async function handlePapers(
   sendRawJson(res, result.stdout)
 }
 
-async function handleNotesList(settings: Config, req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleNotesList(settings: HostSettings, req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== 'GET') {
     res.statusCode = 405
     res.setHeader('allow', 'GET')
@@ -315,7 +350,7 @@ async function handleNotesList(settings: Config, req: IncomingMessage, res: Serv
   sendJson(res, 200, { notes })
 }
 
-async function handleNotesFile(settings: Config, req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleNotesFile(settings: HostSettings, req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== 'GET' && req.method !== 'PUT') {
     res.statusCode = 405
     res.setHeader('allow', 'GET, PUT')
@@ -398,7 +433,7 @@ function handlePdfiumWasm(req: IncomingMessage, res: ServerResponse): void {
   stream.pipe(res)
 }
 
-async function handlePdf(settings: Config, req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handlePdf(settings: HostSettings, req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== 'GET') {
     res.statusCode = 405
     res.setHeader('allow', 'GET')
@@ -428,7 +463,7 @@ async function handlePdf(settings: Config, req: IncomingMessage, res: ServerResp
  * refuses signed or unsupported documents. The save is atomic (tmp + rename).
  */
 async function handlePdfBookmarks(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
@@ -593,7 +628,7 @@ async function finishCliJson(
 }
 
 async function handleMarks(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
   children: Set<ChildProcess>,
@@ -678,7 +713,7 @@ async function handleMarks(
 
 /** Serve one PNG crop stored under `<paper>/marks/assets`. */
 async function handleMarkAsset(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
@@ -741,7 +776,7 @@ async function translateForResponse(translate: TranslateText, text: string, targ
 
 /** Translate text directly through the Harness model service. */
 async function handleTranslate(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
   translate: TranslateText,
@@ -851,7 +886,7 @@ async function sendCatalog(
 }
 
 async function handleImport(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
   children: Set<ChildProcess>,
@@ -868,7 +903,7 @@ async function handleImport(
 }
 
 async function handleImportBib(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
   children: Set<ChildProcess>,
@@ -885,7 +920,7 @@ async function handleImportBib(
 }
 
 async function handleExportBib(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
   children: Set<ChildProcess>,
@@ -901,7 +936,7 @@ async function handleExportBib(
 }
 
 async function handleTags(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
   children: Set<ChildProcess>,
@@ -920,7 +955,7 @@ async function handleTags(
 }
 
 async function handleDelete(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
   children: Set<ChildProcess>,
@@ -937,7 +972,7 @@ async function handleDelete(
 }
 
 async function handleReadFlag(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
   children: Set<ChildProcess>,
@@ -954,7 +989,7 @@ async function handleReadFlag(
 }
 
 async function handleDownload(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
   children: Set<ChildProcess>,
@@ -971,7 +1006,7 @@ async function handleDownload(
 }
 
 async function handleDiscover(
-  settings: Config,
+  settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
   children: Set<ChildProcess>,
@@ -988,7 +1023,7 @@ async function handleDiscover(
 }
 
 async function handleApi(
-  settings: Config,
+  settings: HostSettings,
   agents: AgentRegistryLike,
   req: IncomingMessage,
   res: ServerResponse,
@@ -1127,12 +1162,12 @@ async function handleApi(
  * Read `vault` and `agenteroBin`. Serve paper list, PDF bytes, marks, and
  * note files under `/agentero/api`. `POST /agentero/api/context` queues a
  * citation on the named session without waking its driver.
- * Config uses the Harness-provided schema so vault selection is persisted
- * through DSH's settings writer, preserving other profile fields.
+ * `vault`, `agenteroBin`, and `recentVaults` are volatile, so the Plugins page
+ * writes them through DSH's settings service while this instance keeps running.
  * @param ctx - Host plugin context.
- * @param config - Raw loader config. Missing fields use the defaults.
+ * @param config - Loader config with live references. Missing fields use the defaults.
  */
-export function apply(ctx: Context, config?: unknown): void {
+export function apply(ctx: Context, config?: Config): void {
   const settings = settingsFrom(config)
   const agents = (ctx as Context & { agents: AgentRegistryLike }).agents
   const picker = (): ReturnType<DirectoryPickerLike['capability']> | undefined => (ctx.get('directoryPicker') as DirectoryPickerLike | undefined)?.capability()

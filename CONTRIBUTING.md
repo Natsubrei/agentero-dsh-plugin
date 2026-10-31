@@ -116,7 +116,9 @@ profile 目录不属于任何一个 Git 仓库。
 
 每个包的 Node 入口导出 `name` 与 `apply`。带界面的包另外声明 `dsh.client.platform: web`，`exports["./client"]` 指向 `lib/client.js`。这个文件以 `window.__ModuleLoader__.load` 开头，React 和 `@deepseek-ai/dsh-client-*` 保持为外部 `require()`。
 
-Host 的 Node 插件名是 `agentero-host`。它读取可选配置 `vault`（默认 `""`）、`agenteroBin`（默认 `"agentero"`）和 `agenteroSettings`（默认 `$XDG_CONFIG_HOME/agentero/settings.json`），并在加载时打印 `[agentero] plugin loaded`。浏览器入口提供名为 `agentero` 的服务。Host 在 `/agentero/api` 下提供论文列表、PDF 字节、标注，以及 `<vault>/notes` 的笔记列表和文件读写；`/agentero/api/recommend` 提供 arXiv 每日推荐、知乎检索和推荐设置。`PUT` 还可以写 `papers/<id>/NOTES.md`。文献面板列出论文。笔记面板列出并编辑 `notes/`，并填进 PDF 右侧的论文笔记槽。PDF 面板用 EmbedPDF / PDFium 阅读，划词后调用 `agentero mark add`。推荐卡片条读取 Agentero 的 Embedding / 知乎凭证，缺少时可以在条内的设置里保存到 `$XDG_CONFIG_HOME/agentero/dsh-recommend.json`。Host 另外提供 `GET /agentero/api/pdfium.wasm`。
+Host 的 Node 插件名是 `agentero-host`。它读取可选配置 `vault`（默认 `""`）、`agenteroBin`（默认 `"agentero"`）和 `agenteroSettings`（默认 `$XDG_CONFIG_HOME/agentero/settings.json`），并在加载时打印 `[agentero] plugin loaded`。`vault`、`agenteroBin`、`recentVaults` 是 `.volatile()` 字段，运行时通过 `Volatile.get()` 读取，所以 Plugins 页保存后立即生效，不需要重挂载。浏览器入口提供名为 `agentero` 的服务。Host 在 `/agentero/api` 下提供论文列表、PDF 字节、标注，以及 `<vault>/notes` 的笔记列表和文件读写；`/agentero/api/recommend` 提供 arXiv 每日推荐、知乎检索和推荐设置。`PUT` 还可以写 `papers/<id>/NOTES.md`。文献面板列出论文。笔记面板列出并编辑 `notes/`，并填进 PDF 右侧的论文笔记槽。PDF 面板用 EmbedPDF / PDFium 阅读，划词后调用 `agentero mark add`。推荐卡片条读取 Agentero 的 Embedding / 知乎凭证，缺少时可以在条内的设置里保存到 `$XDG_CONFIG_HOME/agentero/dsh-recommend.json`。Host 另外提供 `GET /agentero/api/pdfium.wasm`。
+
+设置页在 `packages/host/src/client/settings.tsx`，注册到 Plugins 页的 `plugins.row.config`，key 为 `agentero-dsh-plugin#agentero-host`。Plugins 页负责把该行的 `form`（`state` 和 `mutate`）注入组件并负责持久化，页面只画知识库和 CLI 两个字段。`packages/host` 单独配置了 shadcn（`components.json`，别名 `@/*` 指向 `src/client/*`）；新增原子组件可以 `cd packages/host && npx shadcn@latest add <name>`，也可以照 `src/client/ui/` 现有写法手写。其他面板各自维护自己的组件。
 
 生效配置从空根开始，按这个顺序叠层：
 
@@ -133,7 +135,7 @@ Host 的 Node 插件名是 `agentero-host`。它读取可选配置 `vault`（默
 2. 在本仓库运行 `corepack pnpm build`。
 3. 重启 `corepack pnpm dsh web --no-open`。
 
-只改 profile 或 home 的 `cordis.patch.yml` 里已有行的 `config` 时，Cordis 会热替换该插件。组合包的安装和移除要重启进程后才生效。
+只改 profile 或 home 的 `cordis.patch.yml` 里已有行的 `config` 时，Cordis 会热替换该插件。`vault`、`agenteroBin`、`recentVaults` 是 volatile 字段，改它们只会更新运行中的引用，不会重挂载。组合包的安装和移除要重启进程后才生效。
 
 临时用绝对路径加载 TypeScript、不经过 `lib/` 时，在本仓库写一份不提交的 `dev.patch.yml`：
 

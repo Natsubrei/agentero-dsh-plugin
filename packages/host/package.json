@@ -54,12 +54,22 @@
   ],
   "dsh": {
     "client": {
-      "platform": "web"
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ]
     }
   },
   "dependencies": {
     "@embedpdf/pdfium": "2.14.4",
-    "pdf-lib": "1.17.1"
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.554.0",
+    "pdf-lib": "1.17.1",
+    "radix-ui": "^1.4.3",
+    "tailwind-merge": "^3.3.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.5"
