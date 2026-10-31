@@ -58,12 +58,7 @@ dsh plugin --profile web add github:poco-ai/agentero-dsh-plugin
 dsh web --no-open
 ```
 
-看到 `[agentero] plugin loaded` 后打开终端打印的链接。点侧边栏「更多」→「设置」→「Agentero」：
-
-- **知识库**：填你的 Agentero Vault 目录，也可以直接选文件夹。
-- **Agentero CLI**：填 `agentero` 可执行文件的位置；留空则使用 PATH 里的 `agentero`。
-
-保存后回到会话，右侧就有「文献」和「笔记」。
+看到 `[agentero] plugin loaded` 后打开终端打印的链接。点侧边栏「更多」→「设置」→「Agentero」，填 Agentero CLI 的可执行文件位置；留空则使用 PATH 里的 `agentero`。知识库在右侧「文献」面板顶部切换。
 
 也可以直接改 `~/.dsh/profiles/web/cordis.patch.yml`，适合脚本化部署：
 
