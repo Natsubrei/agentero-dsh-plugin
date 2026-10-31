@@ -1,8 +1,8 @@
-/** The Agentero row's configuration page on the dsh Plugins page. */
-import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
+/** Agentero's section in the dsh Settings dialog. */
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { Check, FolderOpen } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { AgenteroSettingsFace } from './settings-model'
 import { Button } from '@/ui/button'
 import { Input } from '@/ui/input'
 
@@ -12,7 +12,7 @@ export interface SettingsVault {
   canPick: boolean
 }
 
-/** Host calls the page uses for the vault; the CLI field persists through `form`. */
+/** Host calls the page uses for the vault; the CLI field persists through the form face. */
 export interface SettingsFace {
   loadVault(): Promise<SettingsVault>
   pickVault(): Promise<string | null>
@@ -20,18 +20,20 @@ export interface SettingsFace {
   reload(): void
 }
 
+export type AgenteroFace = SettingsFace & AgenteroSettingsFace
+
 export type AgenteroSettingsProps =
-  PropsRuntime<'plugins.row.config'>
+  PropsRuntime<'settings.section'>
   & PropsLocale<'agentero.settings'>
-  & InjectFace<SettingsFace>
+  & InjectFace<AgenteroFace>
 
 export type SettingsLocaleKey =
-  | 'summary' | 'vaultTitle' | 'vaultHint' | 'vaultPlaceholder' | 'choose' | 'apply' | 'applying'
-  | 'cliTitle' | 'cliHint' | 'cliPlaceholder' | 'save' | 'saving' | 'saved' | 'saveFailed'
+  | 'nav' | 'vaultTitle' | 'vaultHint' | 'vaultPlaceholder' | 'choose' | 'apply' | 'applying'
+  | 'cliTitle' | 'cliHint' | 'cliPlaceholder' | 'save' | 'saving' | 'saved' | 'saveFailed' | 'reset'
   | 'loadFailed' | 'invalidVault' | 'unavailable' | 'reloadHint'
 
 export const en: Record<SettingsLocaleKey, string> = {
-  summary: 'Knowledge base and Agentero CLI',
+  nav: 'Agentero',
   vaultTitle: 'Knowledge base',
   vaultHint: 'Folder that holds your papers and notes. Switching reloads the page so every panel reads the new vault.',
   vaultPlaceholder: '/path/to/vault',
@@ -45,6 +47,7 @@ export const en: Record<SettingsLocaleKey, string> = {
   saving: 'Saving…',
   saved: 'Saved',
   saveFailed: 'The Host did not accept this change.',
+  reset: 'Reset to default',
   loadFailed: 'Could not read the current knowledge base.',
   invalidVault: 'Choose an existing Agentero Vault folder.',
   unavailable: 'These settings are not available in this deployment.',
@@ -52,7 +55,7 @@ export const en: Record<SettingsLocaleKey, string> = {
 }
 
 export const zh: Record<SettingsLocaleKey, string> = {
-  summary: '知识库与 Agentero CLI',
+  nav: 'Agentero',
   vaultTitle: '知识库',
   vaultHint: '保存论文和笔记的 Vault 目录。切换后页面会刷新，让所有面板读取新的知识库。',
   vaultPlaceholder: '/path/to/vault',
@@ -66,6 +69,7 @@ export const zh: Record<SettingsLocaleKey, string> = {
   saving: '保存中…',
   saved: '已保存',
   saveFailed: 'Host 没有接受这次修改。',
+  reset: '恢复默认',
   loadFailed: '无法读取当前知识库。',
   invalidVault: '请选择一个有效的 Agentero Vault 目录。',
   unavailable: '当前部署不提供这项设置。',
@@ -82,20 +86,18 @@ function messageOf(error: unknown, fallback: string): string {
   return error instanceof Error && error.message !== '' ? error.message : fallback
 }
 
-/** Render the knowledge base and CLI fields as the Plugins page's row configuration body. */
+/** Render the knowledge base and CLI fields inside the Settings dialog. */
 export function AgenteroSettings(props: AgenteroSettingsProps) {
-  const { t, form } = props
+  const { t } = props
+  const state = props.useAgenteroSettings(snapshot => snapshot)
   const [vault, setVault] = useState('')
   const [vaultDraft, setVaultDraft] = useState('')
   const [canPick, setCanPick] = useState(false)
   const [picking, setPicking] = useState(false)
   const [applying, setApplying] = useState(false)
   const [vaultError, setVaultError] = useState('')
-  const [bin, setBin] = useState('')
-  const [binTouched, setBinTouched] = useState(false)
-  const [savingBin, setSavingBin] = useState(false)
-  const [binError, setBinError] = useState('')
-  const [binSaved, setBinSaved] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const saving = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -111,17 +113,20 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
   }, [props.loadVault, t])
 
   useEffect(() => {
-    if (binTouched || form?.state.status !== 'ready' || form.state.value === undefined) return
-    const value = form.state.value.agenteroBin
-    setBin(typeof value === 'string' ? value : '')
-  }, [binTouched, form])
+    if (state.saving) {
+      saving.current = true
+      setSaved(false)
+      return
+    }
+    if (!saving.current) return
+    saving.current = false
+    if (!state.failed) setSaved(true)
+  }, [state.saving, state.failed])
 
-  if (props.view === 'summary') return t('summary')
-
-  const writable = form?.state.writable ?? false
   const busy = picking || applying
   const draft = vaultDraft.trim()
   const vaultReady = draft !== '' && draft !== vault && !busy
+  const disabled = !state.writable || state.saving
 
   const pick = async (): Promise<void> => {
     setPicking(true)
@@ -148,25 +153,6 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
       setVaultError(message === 'invalid vault' ? t('invalidVault') : message)
     } finally {
       setApplying(false)
-    }
-  }
-
-  const saveBin = async (): Promise<void> => {
-    if (form === undefined) return
-    setSavingBin(true)
-    setBinError('')
-    setBinSaved(false)
-    try {
-      const value = bin.trim()
-      const ok = await form.mutate(value === ''
-        ? [{ op: 'unset', path: ['agenteroBin'] }]
-        : [{ op: 'set', path: ['agenteroBin'], value }], form.state.revision)
-      if (ok) setBinSaved(true)
-      else setBinError(t('saveFailed'))
-    } catch (error) {
-      setBinError(messageOf(error, t('saveFailed')))
-    } finally {
-      setSavingBin(false)
     }
   }
 
@@ -202,24 +188,27 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
         <h3 className="text-sm font-medium">{t('cliTitle')}</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">{t('cliHint')}</p>
       </div>
-      {form === undefined || form.state.status === 'unavailable'
+      {!state.available
         ? <p role="status" className="text-xs text-muted-foreground">{t('unavailable')}</p>
         : <div className="flex items-center gap-2">
           <Input
-            value={bin}
+            value={state.agenteroBin.text}
             aria-label={t('cliTitle')}
             placeholder={t('cliPlaceholder')}
             spellCheck={false}
-            disabled={!writable || savingBin}
+            disabled={disabled}
             className="font-mono text-xs"
-            onChange={(event) => { setBinTouched(true); setBin(event.target.value); setBinSaved(false); setBinError('') }}
+            onChange={(event) => { props.edit('agenteroBin', event.target.value); setSaved(false) }}
           />
-          <Button type="button" size="sm" disabled={!writable || savingBin} onClick={() => { void saveBin() }}>
-            {savingBin ? t('saving') : t('save')}
+          {state.agenteroBin.overridden
+            ? <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => { props.resetField('agenteroBin'); setSaved(false) }}>{t('reset')}</Button>
+            : null}
+          <Button type="button" size="sm" disabled={disabled || !state.dirty || state.invalid} onClick={() => { props.save() }}>
+            {state.saving ? t('saving') : t('save')}
           </Button>
         </div>}
-      {binError !== '' ? <p role="status" className="text-xs text-destructive">{binError}</p> : null}
-      {binSaved ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><Check className="size-3" aria-hidden />{t('saved')}</p> : null}
+      {state.failed ? <p role="status" className="text-xs text-destructive">{t('saveFailed')}</p> : null}
+      {saved && !state.failed ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><Check className="size-3" aria-hidden />{t('saved')}</p> : null}
     </section>
   </div>
 }

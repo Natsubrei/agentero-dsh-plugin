@@ -58,7 +58,7 @@ dsh plugin --profile web add github:poco-ai/agentero-dsh-plugin
 dsh web --no-open
 ```
 
-看到 `[agentero] plugin loaded` 后打开终端打印的链接。在侧边栏点「插件」，找到 `agentero-dsh-plugin`，打开 `agentero-dsh-host` 这一行，点「配置」：
+看到 `[agentero] plugin loaded` 后打开终端打印的链接。点侧边栏「更多」→「设置」→「Agentero」：
 
 - **知识库**：填你的 Agentero Vault 目录，也可以直接选文件夹。
 - **Agentero CLI**：填 `agentero` 可执行文件的位置；留空则使用 PATH 里的 `agentero`。

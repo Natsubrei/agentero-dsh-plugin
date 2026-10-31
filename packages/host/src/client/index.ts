@@ -2,7 +2,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { AgenteroSettings, en as settingsEn, zh as settingsZh, type SettingsFace } from './settings'
+import { AgenteroSettingsModel, type AgenteroCliSettings } from './settings-model'
 
 export interface VaultInfo {
   path: string
@@ -72,14 +74,11 @@ declare module '@deepseek-ai/cordis' {
 /** Browser plugin name. The service key is the same name. */
 export const name = 'agentero'
 
-/** Locale and slots serve the panels and the row's configuration page. */
-export const inject = ['slots', 'locale']
+/** Locale, slots, and the shared configuration form serve the panels and Settings. */
+export const inject = ['slots', 'locale', 'configForms']
 
-/** Settings page namespace on the Plugins page. */
+/** Settings section namespace in the Settings dialog. */
 const SETTINGS_NS = 'agentero.settings'
-
-/** The row this package configures; `<bundle package>#<row id>` as the bundle patch declares it. */
-const SETTINGS_KEY = 'agentero-dsh-plugin#agentero-host'
 
 async function bodyOf(response: Response): Promise<unknown> {
   const text = await response.text()
@@ -167,6 +166,7 @@ export function apply(ctx: Context): void {
   }
   ctx.provide('agentero', agentero)
   ctx.effect(() => ctx.locale.register(SETTINGS_NS, { en: settingsEn, zh: settingsZh }))
+  const tSettings = ctx.locale.bind(SETTINGS_NS)
   const settingsFace: SettingsFace = {
     async loadVault() {
       const vault = await getVault()
@@ -189,11 +189,14 @@ export function apply(ctx: Context): void {
     },
     reload() { window.location.reload() },
   }
-  // The Plugins page owns the row's configuration form; this package only draws the body.
-  ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
-    name: 'plugins.row.config',
-    key: SETTINGS_KEY,
+  const settingsModel = new AgenteroSettingsModel(ctx.configForms.get<AgenteroCliSettings>('agentero-host'))
+  ctx.effect(() => () => { settingsModel.dispose() })
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'agentero',
+    order: 16,
+    label: () => tSettings('nav'),
     locale: SETTINGS_NS,
-    inject: () => settingsFace,
+    inject: () => ({ ...settingsFace, ...settingsModel.inject() }),
   }, AgenteroSettings))
 }
