@@ -59,13 +59,8 @@ const zh = {
   paperCount: '{count} 篇文献',
   filteredCount: '{count} / {total} 篇文献',
   clearResults: '关闭发现结果',
-  selectVault: '选择知识库',
-  vaultPath: '知识库目录',
-  chooseDirectory: '选择文件夹…',
-  openVault: '打开',
   invalidVault: '请选择已有的 Agentero 知识库根目录。',
   pickerUnavailable: '目录选择器不可用，请输入知识库路径。',
-  switchVaultConfirm: '切换知识库会重新加载当前页面，请先保存笔记。是否继续？',
 }
 
 const en = {
@@ -102,13 +97,8 @@ const en = {
   paperCount: '{count} papers',
   filteredCount: '{count} of {total} papers',
   clearResults: 'Close discovery results',
-  selectVault: 'Select knowledge base',
-  vaultPath: 'Knowledge base directory',
-  chooseDirectory: 'Choose folder…',
-  openVault: 'Open',
   invalidVault: 'Choose the root directory of an existing Agentero knowledge base.',
   pickerUnavailable: 'The directory picker is unavailable. Enter the knowledge base path instead.',
-  switchVaultConfirm: 'Switching knowledge bases reloads this page. Save your notes first. Continue?',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -173,20 +163,6 @@ export function apply(ctx: Context): void {
   const face: LibraryFace = {
     notifyError(message) { notice.set({ text: message, sequence: ++sequence }) },
     loadVault() { return agentero().getVault() },
-    async pickVault() {
-      const body = await post('/agentero/api/vault/pick', {}) as { path: string | null }
-      return body.path
-    },
-    async selectVault(path) {
-      const response = await request('/agentero/api/vault', {
-        method: 'PUT', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path }),
-      })
-      const body = await readJson(response)
-      if (!response.ok) throw new Error(errorText(body) ?? t('actionFailed'))
-      // Clear every panel, PDF buffer and unsaved editor source together.
-      window.location.reload()
-    },
     async loadPapers() {
       const response = await request('/agentero/api/papers', { cache: 'no-store' })
       const body = await readJson(response)

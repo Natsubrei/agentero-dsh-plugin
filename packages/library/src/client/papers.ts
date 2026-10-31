@@ -13,8 +13,6 @@ export interface VaultInfo {
 export interface LibraryFace {
   notifyError(message: string): void
   loadVault(): Promise<VaultInfo>
-  pickVault(): Promise<string | null>
-  selectVault(path: string): Promise<void>
   loadPapers(): Promise<unknown>
   openPaper(id: string): boolean
   importId(text: string): Promise<void>

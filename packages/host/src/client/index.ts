@@ -3,7 +3,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import { AgenteroSettings, en as settingsEn, zh as settingsZh } from './settings'
+import { AgenteroSettings, en as settingsEn, zh as settingsZh, type SettingsFace } from './settings'
 import { AgenteroSettingsModel, type AgenteroCliSettings } from './settings-model'
 
 export interface VaultInfo {
@@ -80,6 +80,23 @@ export const inject = ['slots', 'locale', 'configForms']
 /** Settings section namespace in the Settings dialog. */
 const SETTINGS_NS = 'agentero.settings'
 
+async function bodyOf(response: Response): Promise<unknown> {
+  const text = await response.text()
+  if (text.trim() === '') return undefined
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return undefined
+  }
+}
+
+function failureText(body: unknown): string | undefined {
+  if (body === null || typeof body !== 'object' || !('error' in body)) return undefined
+  const error = body.error
+  if (typeof error === 'string' && error.trim() !== '') return error
+  return undefined
+}
+
 /**
  * Provide the `agentero` service. Openers stay empty until a later step.
  * @param ctx - Browser plugin context.
@@ -150,6 +167,28 @@ export function apply(ctx: Context): void {
   ctx.provide('agentero', agentero)
   ctx.effect(() => ctx.locale.register(SETTINGS_NS, { en: settingsEn, zh: settingsZh }))
   const tSettings = ctx.locale.bind(SETTINGS_NS)
+  const settingsFace: SettingsFace = {
+    async loadVault() {
+      const vault = await getVault()
+      return { path: vault.path, canPick: vault.canPick }
+    },
+    async pickVault() {
+      const response = await agentero.request('/agentero/api/vault/pick', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+      })
+      const body = await bodyOf(response)
+      if (!response.ok) throw new Error(failureText(body) ?? 'directory picker unavailable')
+      const path = body !== null && typeof body === 'object' ? (body as { path?: unknown }).path : undefined
+      return typeof path === 'string' ? path : null
+    },
+    async saveVault(path) {
+      const response = await agentero.request('/agentero/api/vault', {
+        method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }),
+      })
+      if (!response.ok) throw new Error(failureText(await bodyOf(response)) ?? 'invalid vault')
+    },
+    reload() { window.location.reload() },
+  }
   const settingsModel = new AgenteroSettingsModel(ctx.configForms.get<AgenteroCliSettings>('agentero-host'))
   ctx.effect(() => () => { settingsModel.dispose() })
   ctx.slots.inject('settings.section', () => ctx.slots.register({
@@ -158,6 +197,6 @@ export function apply(ctx: Context): void {
     order: 16,
     label: () => tSettings('nav'),
     locale: SETTINGS_NS,
-    inject: () => settingsModel.inject(),
+    inject: () => ({ ...settingsFace, ...settingsModel.inject() }),
   }, AgenteroSettings))
 }

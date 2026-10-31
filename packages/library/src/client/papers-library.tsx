@@ -8,7 +8,6 @@ import { controlButtonClass, sortValue, type CellCtx, type ColumnKey, type SortD
 import { LibraryPaperRow } from './library-paper-row'
 import { LibraryTableHeader } from './library-table-header'
 import { papersFrom, shown, type LibraryFace, type PaperRow, type VaultInfo } from './papers'
-import { VaultSelector } from './vault-selector'
 
 type LibraryPanelProps =
   PropsRuntime<'sidebar.right.pane.tab'> &
@@ -43,8 +42,6 @@ export function LibraryPanel({
   download,
   notifyError,
   loadVault,
-  pickVault,
-  selectVault,
 }: LibraryPanelProps): ReactNode {
   const [vault, setVault] = useState<VaultInfo | null>(null)
   // Keep the mounted table and its scroll position during background reloads.
@@ -183,7 +180,6 @@ export function LibraryPanel({
 
   return (
     <div className='agentero-library agentero-surface flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background text-foreground'>
-      <VaultSelector t={t} vault={vault} busy={busy} onPick={pickVault} onSelect={(path) => run(() => selectVault(path))} notifyError={notifyError} />
       {found.length === 0 ? null : (
         <div className='flex shrink-0 items-start gap-2 border-b border-border/40 px-3 py-2'>
           <div className='flex min-w-0 flex-1 flex-col gap-1'>
