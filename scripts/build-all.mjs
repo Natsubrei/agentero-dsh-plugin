@@ -1,11 +1,11 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const tsc = join(root, 'node_modules/typescript/bin/tsc')
-const packages = ['host', 'library', 'notes', 'pdf', 'recommend']
+const packages = ['host', 'library', 'notes', 'pdf']
 const noEmit = process.argv.includes('--noEmit')
 
 function run(cwd, args) {
@@ -16,6 +16,7 @@ function run(cwd, args) {
 for (const name of packages) {
   const dir = join(root, 'packages', name)
   const emit = noEmit ? ['--noEmit'] : []
+  if (!noEmit) rmSync(join(dir, 'lib'), { recursive: true, force: true })
   run(dir, [tsc, '-p', 'tsconfig.json', ...emit])
   run(dir, [tsc, '-p', 'tsconfig.client.json', ...emit])
   if (!noEmit) {

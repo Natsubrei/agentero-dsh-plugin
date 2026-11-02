@@ -15,7 +15,6 @@ import { listVaultNotes, locateVaultPath, readVaultFile, within, writeVaultNote 
 import { type MarkRect, readMarks, writeMark } from './marks-store.js'
 import { bookmarkNodesFrom, writePdfBookmarks } from './bookmarks-write.js'
 import { locateVaultPdf, readVaultPdf } from './pdf-file.js'
-import { handleRecommendRequest } from './recommend.js'
 import { registerTools } from './tools.js'
 import { createTranslator, translationTarget, type TranslateText, type TranslationLlm, type DefaultTranslationModel } from './translate.js'
 import { selectVault, vaultInfo, vaultScope } from './vault.js'
@@ -1047,7 +1046,6 @@ async function handleApi(
     sendJson(res, 409, { error: 'vault changed' })
     return
   }
-  if (await handleRecommendRequest(settings, req, res, children)) return
   if (pathname === VAULT_PATH || pathname === VAULT_PICK_PATH) {
     const expectedMethod = pathname === VAULT_PATH ? 'PUT' : 'POST'
     if (req.method !== expectedMethod) {

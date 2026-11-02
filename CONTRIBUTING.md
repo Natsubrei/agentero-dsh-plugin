@@ -55,9 +55,9 @@ cd ..
 cargo build -p agentero-cli
 ```
 
-宿主的 `pnpm run build` 生成仓库产物，之后 `pnpm dsh` 直接使用这些产物。已经构建过就可以跳过。插件的安装不再自动构建，改完代码后运行 `corepack pnpm build` 生成五个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。只做类型检查时运行 `corepack pnpm typecheck`；类型依赖钉在根 `devDependencies` 的 `@deepseek-ai/*` 0.2.2-alpha.2 上，升级宿主时同步改这里。
+宿主的 `pnpm run build` 生成仓库产物，之后 `pnpm dsh` 直接使用这些产物。已经构建过就可以跳过。插件的安装不再自动构建，改完代码后运行 `corepack pnpm build` 生成四个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。只做类型检查时运行 `corepack pnpm typecheck`；类型依赖钉在根 `devDependencies` 的 `@deepseek-ai/*` 0.2.2-alpha.2 上，升级宿主时同步改这里。
 
-五个包把 `@deepseek-ai/cordis` 放在 `peerDependencies`。根 `package.json` 用 `workspace:^` 依赖这五个包，`pnpm publish` 会把它写成具体版本。
+四个包把 `@deepseek-ai/cordis` 放在 `peerDependencies`。根 `package.json` 用 `workspace:^` 依赖这四个包，`pnpm publish` 会把它写成具体版本。
 
 装进 `dsh web` 启动的那个 profile。CLI 把第一个非选项词当成 profile 名：`dsh web` 就是 `--profile web`。不要再写一遍 `--profile`，否则会报 profile 选了两次。名为 `desktop` 的 profile 只给 Electron 用，CLI 不能启动它。
 
@@ -67,7 +67,7 @@ corepack pnpm dsh plugin --profile web add ../agentero-dsh-plugin
 corepack pnpm dsh web --dump-config
 ```
 
-`--dump-config` 里应能看到 `# == @poco-ai/agentero-dsh`，以及 `agentero-host`、`agentero-library`、`agentero-notes`、`agentero-pdf`、`agentero-recommend` 五行。
+`--dump-config` 里应能看到 `# == @poco-ai/agentero-dsh`，以及 `agentero-host`、`agentero-library`、`agentero-notes`、`agentero-pdf` 四行。
 
 Vault 可以在文献面板顶部的「选择知识库」中指定：选择已有知识库根目录并打开，DSH 会保存到当前 profile，并记住最近的目录。切换前先保存笔记，切换后页面会重新载入。CLI 路径仍可在本机 profile 配置；也可手动配置 Vault。不要把本机路径写进会提交的 `cordis.patch.yml`。编辑 `~/.dsh/profiles/web/cordis.patch.yml`（设置了 `DSH_HOME` 时是 `$DSH_HOME/profiles/web/cordis.patch.yml`）。后一层会整段替换目标行的 `config`，不会按键合并，所以两个字段写在一起：
 
@@ -86,7 +86,7 @@ Vault 可以在文献面板顶部的「选择知识库」中指定：选择已�
 corepack pnpm dsh web --no-open
 ```
 
-终端出现 `[agentero] plugin loaded` 后，用它打印的 `http://127.0.0.1:3080/?token=...` 打开。进入一个会话，右侧开始页有「文献」和「笔记」，输入框下方是推荐卡片条。点文献表里的一行打开 PDF。只看界面时不需要 DeepSeek API key。
+终端出现 `[agentero] plugin loaded` 后，用它打印的 `http://127.0.0.1:3080/?token=...` 打开。进入一个会话，右侧开始页有「文献」和「笔记」。点文献表里的一行打开 PDF。只看界面时不需要 DeepSeek API key。
 
 卸下插件：
 
@@ -98,7 +98,7 @@ profile 目录不属于任何一个 Git 仓库。
 
 ## 插件在仓库里的形态
 
-根目录是组合包，不自己导出 `apply`。`cordis.patch.yml` 按包名插入五个 loader 行：
+根目录是组合包，不自己导出 `apply`。`cordis.patch.yml` 按包名插入四个 loader 行：
 
 ```yaml
 - insert:
@@ -110,13 +110,11 @@ profile 目录不属于任何一个 Git 仓库。
       name: '@poco-ai/agentero-dsh-notes'
     - id: agentero-pdf
       name: '@poco-ai/agentero-dsh-pdf'
-    - id: agentero-recommend
-      name: '@poco-ai/agentero-dsh-recommend'
 ```
 
 每个包的 Node 入口导出 `name` 与 `apply`。带界面的包另外声明 `dsh.client.platform: web`，`exports["./client"]` 指向 `lib/client.js`。这个文件以 `window.__ModuleLoader__.load` 开头，React 和 `@deepseek-ai/dsh-client-*` 保持为外部 `require()`。
 
-Host 的 Node 插件名是 `agentero-host`。它读取可选配置 `vault`（默认 `""`）、`agenteroBin`（默认 `"agentero"`）和 `agenteroSettings`（默认 `$XDG_CONFIG_HOME/agentero/settings.json`），并在加载时打印 `[agentero] plugin loaded`。`vault`、`agenteroBin`、`recentVaults` 是 `.volatile()` 字段，运行时通过 `Volatile.get()` 读取，所以 Plugins 页保存后立即生效，不需要重挂载。浏览器入口提供名为 `agentero` 的服务。Host 在 `/agentero/api` 下提供论文列表、PDF 字节、标注，以及 `<vault>/notes` 的笔记列表和文件读写；`/agentero/api/recommend` 提供 arXiv 每日推荐、知乎检索和推荐设置。`PUT` 还可以写 `papers/<id>/NOTES.md`。文献面板列出论文。笔记面板列出并编辑 `notes/`，并填进 PDF 右侧的论文笔记槽。PDF 面板用 EmbedPDF / PDFium 阅读，划词后调用 `agentero mark add`。推荐卡片条读取 Agentero 的 Embedding / 知乎凭证，缺少时可以在条内的设置里保存到 `$XDG_CONFIG_HOME/agentero/dsh-recommend.json`。Host 另外提供 `GET /agentero/api/pdfium.wasm`。
+Host 的 Node 插件名是 `agentero-host`。它读取可选配置 `vault`（默认 `""`）、`agenteroBin`（默认 `"agentero"`）和 `agenteroSettings`（默认 `$XDG_CONFIG_HOME/agentero/settings.json`），并在加载时打印 `[agentero] plugin loaded`。`vault`、`agenteroBin`、`recentVaults` 是 `.volatile()` 字段，运行时通过 `Volatile.get()` 读取，所以 Plugins 页保存后立即生效，不需要重挂载。浏览器入口提供名为 `agentero` 的服务。Host 在 `/agentero/api` 下提供论文列表、PDF 字节、标注，以及 `<vault>/notes` 的笔记列表和文件读写。`PUT` 还可以写 `papers/<id>/NOTES.md`。文献面板列出论文。笔记面板列出并编辑 `notes/`，并填进 PDF 右侧的论文笔记槽。PDF 面板用 EmbedPDF / PDFium 阅读，划词后调用 `agentero mark add`。Host 另外提供 `GET /agentero/api/pdfium.wasm`。
 
 设置页在 `packages/host/src/client/settings.tsx`，注册到 Settings 的 `settings.section`（导航名 `Agentero`）。CLI 字段通过 `ctx.configForms.get('agentero-host')` 走 dsh 的配置表单，`settings-model.ts` 负责草稿和保存；知识库走会校验目录的 `PUT /agentero/api/vault`，成功后刷新页面。文献面板只读取当前知识库，不再提供切换器。`packages/host` 单独配置了 shadcn（`components.json`，别名 `@/*` 指向 `src/client/*`）；新增原子组件可以 `cd packages/host && npx shadcn@latest add <name>`，也可以照 `src/client/ui/` 现有写法手写。其他面板各自维护自己的组件。
 
@@ -170,7 +168,7 @@ git tag v0.1.1
 git push origin main --tags
 ```
 
-`bump` 会把根包和五个子包的版本一起改掉。带预发布后缀的版本（如 `0.1.1-beta.1`）会自动发到 `next` dist-tag，正式版发到 `latest`。
+`bump` 会把根包和四个子包的版本一起改掉。带预发布后缀的版本（如 `0.1.1-beta.1`）会自动发到 `next` dist-tag，正式版发到 `latest`。
 
 npm 对非交互发布启用了 staged publishing：CI 上传成功只代表版本进了暂存队列，不会直接上线；未批准的版本显示为 `0.0.0-stage`，不能安装。上传后需要维护者在本地用 2FA 批准：
 
@@ -199,7 +197,6 @@ corepack pnpm release
 | `@poco-ai/agentero-dsh-library` | 文献库面板 |
 | `@poco-ai/agentero-dsh-notes` | 笔记面板 |
 | `@poco-ai/agentero-dsh-pdf` | PDF 面板 |
-| `@poco-ai/agentero-dsh-recommend` | 推荐卡片条（暂未启用） |
 
 用户安装：
 
@@ -216,4 +213,4 @@ dsh plugin --profile web add @poco-ai/agentero-dsh
 - `dev.patch.yml`（里面是本机绝对路径）
 - API key、`.env`、profile 目录
 
-发布前先运行 `corepack pnpm build`，让五个包的 `lib/` 进入各自的 npm 包；`lib/` 仍然不提交。根包只携带 `cordis.patch.yml`，五个子包通过 `dependencies` 装进 profile。
+发布前先运行 `corepack pnpm build`，让四个包的 `lib/` 进入各自的 npm 包；`lib/` 仍然不提交。根包只携带 `cordis.patch.yml`，四个子包通过 `dependencies` 装进 profile。

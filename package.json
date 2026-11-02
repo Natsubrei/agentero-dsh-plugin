@@ -29,8 +29,7 @@
     "@poco-ai/agentero-dsh-host": "workspace:^",
     "@poco-ai/agentero-dsh-library": "workspace:^",
     "@poco-ai/agentero-dsh-notes": "workspace:^",
-    "@poco-ai/agentero-dsh-pdf": "workspace:^",
-    "@poco-ai/agentero-dsh-recommend": "workspace:^"
+    "@poco-ai/agentero-dsh-pdf": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.6-alpha.1",

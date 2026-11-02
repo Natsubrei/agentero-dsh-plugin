@@ -7,6 +7,3 @@
       name: '@poco-ai/agentero-dsh-notes'
     - id: agentero-pdf
       name: '@poco-ai/agentero-dsh-pdf'
-    # Temporarily disabled: the recommend dock is not loaded until further notice.
-    # - id: agentero-recommend
-    #   name: '@poco-ai/agentero-dsh-recommend'
