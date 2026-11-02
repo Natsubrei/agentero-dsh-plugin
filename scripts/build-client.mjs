@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path'
 
 const pkgDir = process.cwd()
 const pkg = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'))
+const shortName = pkg.name.slice(pkg.name.lastIndexOf('/') + 1)
 const outfile = join(pkgDir, 'lib/client.js')
 
 const plugins = [
@@ -27,7 +28,7 @@ const plugins = [
   },
 ]
 
-if (pkg.name === 'agentero-dsh-notes') {
+if (shortName === 'agentero-dsh-notes') {
   plugins.push({
     name: 'katex-css-stub',
     setup(build) {
@@ -45,7 +46,7 @@ if (pkg.name === 'agentero-dsh-notes') {
   })
 }
 
-if (pkg.name === 'agentero-dsh-pdf') {
+if (shortName === 'agentero-dsh-pdf') {
   plugins.push({
     name: 'pdfium-wasm-base',
     setup(build) {

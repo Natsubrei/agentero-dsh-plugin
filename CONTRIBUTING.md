@@ -55,9 +55,9 @@ cd ..
 cargo build -p agentero-cli
 ```
 
-宿主的 `pnpm run build` 生成仓库产物，之后 `pnpm dsh` 直接使用这些产物。已经构建过就可以跳过。插件的 `prepare` 会构建五个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。需要单独重建时运行 `corepack pnpm build`；只做类型检查时运行 `corepack pnpm typecheck`，旁边的 `deepseek-harness` 检出要包含 `@deepseek-ai/dsh-client-ui-conversation` 的 `lib/types`，推荐卡片条注册的 `conversation.input.dock` 由它声明。
+宿主的 `pnpm run build` 生成仓库产物，之后 `pnpm dsh` 直接使用这些产物。已经构建过就可以跳过。插件的安装不再自动构建，改完代码后运行 `corepack pnpm build` 生成五个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。只做类型检查时运行 `corepack pnpm typecheck`，旁边的 `deepseek-harness` 检出要包含 `@deepseek-ai/dsh-client-ui-conversation` 的 `lib/types`，推荐卡片条注册的 `conversation.input.dock` 由它声明。
 
-五个包把 `@deepseek-ai/cordis` 放在 `peerDependencies`。根 `package.json` 用 `file:./packages/host` 等依赖这五个包名，方便 profile 安装时解析。
+五个包把 `@deepseek-ai/cordis` 放在 `peerDependencies`。根 `package.json` 用 `workspace:^` 依赖这五个包，`pnpm publish` 会把它写成具体版本。
 
 装进 `dsh web` 启动的那个 profile。CLI 把第一个非选项词当成 profile 名：`dsh web` 就是 `--profile web`。不要再写一遍 `--profile`，否则会报 profile 选了两次。名为 `desktop` 的 profile 只给 Electron 用，CLI 不能启动它。
 
@@ -67,7 +67,7 @@ corepack pnpm dsh plugin --profile web add ../agentero-dsh-plugin
 corepack pnpm dsh web --dump-config
 ```
 
-`--dump-config` 里应能看到 `# == agentero-dsh-plugin`，以及 `agentero-host`、`agentero-library`、`agentero-notes`、`agentero-pdf`、`agentero-recommend` 五行。
+`--dump-config` 里应能看到 `# == @poco-ai/agentero-dsh`，以及 `agentero-host`、`agentero-library`、`agentero-notes`、`agentero-pdf`、`agentero-recommend` 五行。
 
 Vault 可以在文献面板顶部的「选择知识库」中指定：选择已有知识库根目录并打开，DSH 会保存到当前 profile，并记住最近的目录。切换前先保存笔记，切换后页面会重新载入。CLI 路径仍可在本机 profile 配置；也可手动配置 Vault。不要把本机路径写进会提交的 `cordis.patch.yml`。编辑 `~/.dsh/profiles/web/cordis.patch.yml`（设置了 `DSH_HOME` 时是 `$DSH_HOME/profiles/web/cordis.patch.yml`）。后一层会整段替换目标行的 `config`，不会按键合并，所以两个字段写在一起：
 
@@ -91,7 +91,7 @@ corepack pnpm dsh web --no-open
 卸下插件：
 
 ```sh
-corepack pnpm dsh plugin --profile web remove agentero-dsh-plugin
+corepack pnpm dsh plugin --profile web remove @poco-ai/agentero-dsh
 ```
 
 profile 目录不属于任何一个 Git 仓库。
@@ -103,15 +103,15 @@ profile 目录不属于任何一个 Git 仓库。
 ```yaml
 - insert:
     - id: agentero-host
-      name: agentero-dsh-host
+      name: '@poco-ai/agentero-dsh-host'
     - id: agentero-library
-      name: agentero-dsh-library
+      name: '@poco-ai/agentero-dsh-library'
     - id: agentero-notes
-      name: agentero-dsh-notes
+      name: '@poco-ai/agentero-dsh-notes'
     - id: agentero-pdf
-      name: agentero-dsh-pdf
+      name: '@poco-ai/agentero-dsh-pdf'
     - id: agentero-recommend
-      name: agentero-dsh-recommend
+      name: '@poco-ai/agentero-dsh-recommend'
 ```
 
 每个包的 Node 入口导出 `name` 与 `apply`。带界面的包另外声明 `dsh.client.platform: web`，`exports["./client"]` 指向 `lib/client.js`。这个文件以 `window.__ModuleLoader__.load` 开头，React 和 `@deepseek-ai/dsh-client-*` 保持为外部 `require()`。
@@ -154,22 +154,43 @@ corepack pnpm dsh web --patch ../agentero-dsh-plugin/dev.patch.yml --no-open
 
 这条路径只用于冒烟。要安装、分发的仍然是声明了 `dsh.bundle` 的组合包。
 
-## 从 Git 安装
+## 发布到 npm
 
-用户可以执行：
+插件按产物分发：发布时构建，用户装到的是 `lib/`，安装阶段不执行构建脚本，也不需要 `allowBuilds`。
+
+六个包同版本发布，`pnpm -r publish` 按拓扑顺序先发子包、再发根包：
 
 ```sh
-dsh plugin --profile web add github:poco-ai/agentero-dsh-plugin
+corepack pnpm build
+corepack pnpm -r publish --registry=https://registry.npmjs.org
 ```
 
-Git 安装拿到的是源码。`prepare` 会在安装后编译 `lib/`。编译用相对路径读取旁边的 `deepseek-harness` 类型，没有这份检出时 `prepare` 会失败。pnpm 10 及以上默认不跑 Git 依赖的构建脚本，第一次 `add` 可能失败。按 CLI 提示把包名写入该 profile 的 `pnpm-workspace.yaml`：
+根包的 `release` 脚本把这两步合在一起。发布前先登录官方源（国内镜像只读）：
 
-```yaml
-allowBuilds:
-  agentero-dsh-plugin: true
+```sh
+npm login --registry=https://registry.npmjs.org
 ```
 
-然后重新执行 `add`。这项授权会让本包的代码在安装时于本机执行。只对可信提交这样做，并用 `github:poco-ai/agentero-dsh-plugin#<commit>` 锁住版本。
+`npm publish` 只认 `--otp`。账号开了 2FA 时把验证码通过 `npm_config_otp` 传进去，例如 `npm_config_otp=123456 corepack pnpm release`。
+
+`@poco-ai` 这个 scope 需要先在 npm 上存在（组织或用户名），六个包都发布在它下面：
+
+| 包 | 用途 |
+| --- | --- |
+| `@poco-ai/agentero-dsh` | 组合包，声明 `dsh.bundle` |
+| `@poco-ai/agentero-dsh-host` | Host 与设置页 |
+| `@poco-ai/agentero-dsh-library` | 文献库面板 |
+| `@poco-ai/agentero-dsh-notes` | 笔记面板 |
+| `@poco-ai/agentero-dsh-pdf` | PDF 面板 |
+| `@poco-ai/agentero-dsh-recommend` | 推荐卡片条（暂未启用） |
+
+用户安装：
+
+```sh
+dsh plugin --profile web add @poco-ai/agentero-dsh
+```
+
+不要再从 `github:` 安装：根包构建依赖旁边的 `deepseek-harness` 类型检出，而且 pnpm 会拦截 Git 依赖的 `prepare`，用户的 profile 里没有对应的 `allowBuilds` 键。
 
 ## 提交时不要带上
 
@@ -178,4 +199,4 @@ allowBuilds:
 - `dev.patch.yml`（里面是本机绝对路径）
 - API key、`.env`、profile 目录
 
-发布到 npm 或打 tarball 之前再构建，让 `cordis.patch.yml` 和五个包的 `lib/` 进入包内。
+发布前先运行 `corepack pnpm build`，让五个包的 `lib/` 进入各自的 npm 包；`lib/` 仍然不提交。根包只携带 `cordis.patch.yml`，五个子包通过 `dependencies` 装进 profile。

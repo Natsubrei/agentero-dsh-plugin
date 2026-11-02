@@ -40,7 +40,7 @@ agentero --help
 然后安装插件：
 
 ```sh
-dsh plugin --profile web add github:poco-ai/agentero-dsh-plugin
+dsh plugin --profile web add @poco-ai/agentero-dsh
 ```
 
 在 `~/.dsh/profiles/web/cordis.patch.yml` 里填 Vault 和 CLI 路径：

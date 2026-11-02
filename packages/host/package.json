@@ -1,6 +1,9 @@
 {
-  "name": "agentero-dsh-host",
+  "name": "@poco-ai/agentero-dsh-host",
   "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Agentero host plugin for DeepSeek Harness",
   "type": "module",
   "main": "./lib/index.js",
@@ -17,40 +20,8 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/index.d.ts",
-    "lib/index.js.map",
-    "lib/notes-files.js",
-    "lib/notes-files.d.ts",
-    "lib/notes-files.js.map",
-    "lib/pdf-file.js",
-    "lib/pdf-file.d.ts",
-    "lib/pdf-file.js.map",
-    "lib/cli-run.js",
-    "lib/cli-run.d.ts",
-    "lib/cli-run.js.map",
-    "lib/catalog.js",
-    "lib/catalog.d.ts",
-    "lib/catalog.js.map",
-    "lib/recommend.js",
-    "lib/recommend.d.ts",
-    "lib/recommend.js.map",
-    "src/translation/MOTIF-LICENSE.txt",
-    "lib/translation",
-    "lib/marks-store.js",
-    "lib/marks-store.d.ts",
-    "lib/marks-store.js.map",
-    "lib/translate.js",
-    "lib/translate.d.ts",
-    "lib/translate.js.map",
-    "lib/tools.js",
-    "lib/tools.d.ts",
-    "lib/tools.js.map",
-    "lib/vault.js",
-    "lib/vault.d.ts",
-    "lib/vault.js.map",
-    "lib/client.js",
-    "lib/client/index.d.ts"
+    "lib",
+    "src/translation/MOTIF-LICENSE.txt"
   ],
   "dsh": {
     "client": {

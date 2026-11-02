@@ -1,12 +1,12 @@
 - insert:
     - id: agentero-host
-      name: agentero-dsh-host
+      name: '@poco-ai/agentero-dsh-host'
     - id: agentero-library
-      name: agentero-dsh-library
+      name: '@poco-ai/agentero-dsh-library'
     - id: agentero-notes
-      name: agentero-dsh-notes
+      name: '@poco-ai/agentero-dsh-notes'
     - id: agentero-pdf
-      name: agentero-dsh-pdf
+      name: '@poco-ai/agentero-dsh-pdf'
     # Temporarily disabled: the recommend dock is not loaded until further notice.
     # - id: agentero-recommend
-    #   name: agentero-dsh-recommend
+    #   name: '@poco-ai/agentero-dsh-recommend'

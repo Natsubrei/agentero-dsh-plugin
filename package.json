@@ -1,5 +1,5 @@
 {
-  "name": "agentero-dsh-plugin",
+  "name": "@poco-ai/agentero-dsh",
   "version": "0.1.0",
   "description": "DeepSeek Harness bundle that connects Agentero to dsh",
   "type": "module",
@@ -9,14 +9,15 @@
     "dsh": ">=0.2.1-rc.5 <0.3.0"
   },
   "files": [
-    "cordis.patch.yml",
-    "pnpm-workspace.yaml",
-    "packages"
+    "cordis.patch.yml"
   ],
   "scripts": {
     "build": "node scripts/build-all.mjs",
-    "prepare": "node scripts/build-all.mjs",
-    "typecheck": "node scripts/build-all.mjs --noEmit"
+    "typecheck": "node scripts/build-all.mjs --noEmit",
+    "release": "pnpm build && pnpm -r publish --registry=https://registry.npmjs.org"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dsh": {
     "bundle": {
@@ -24,11 +25,11 @@
     }
   },
   "dependencies": {
-    "agentero-dsh-host": "file:./packages/host",
-    "agentero-dsh-library": "file:./packages/library",
-    "agentero-dsh-notes": "file:./packages/notes",
-    "agentero-dsh-pdf": "file:./packages/pdf",
-    "agentero-dsh-recommend": "file:./packages/recommend"
+    "@poco-ai/agentero-dsh-host": "workspace:^",
+    "@poco-ai/agentero-dsh-library": "workspace:^",
+    "@poco-ai/agentero-dsh-notes": "workspace:^",
+    "@poco-ai/agentero-dsh-pdf": "workspace:^",
+    "@poco-ai/agentero-dsh-recommend": "workspace:^"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.16",

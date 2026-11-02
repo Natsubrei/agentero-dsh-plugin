@@ -1,6 +1,9 @@
 {
-  "name": "agentero-dsh-notes",
+  "name": "@poco-ai/agentero-dsh-notes",
   "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Agentero notes panel for DeepSeek Harness",
   "type": "module",
   "main": "./lib/index.js",
@@ -17,11 +20,7 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
-    "lib/index.d.ts",
-    "lib/index.js.map",
-    "lib/client.js",
-    "lib/client/index.d.ts"
+    "lib"
   ],
   "dsh": {
     "client": {
