@@ -3,3 +3,7 @@ packages:
 allowBuilds:
   '@parcel/watcher': true
   esbuild: true
+autoInstallPeers: false
+peerDependencyRules:
+  allowedVersions:
+    '@deepseek-ai/cordis': '4.0.6-alpha.1'

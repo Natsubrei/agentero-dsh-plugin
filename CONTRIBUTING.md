@@ -39,7 +39,7 @@ motif/
 
 ## 体验
 
-目录必须是上面的并列关系。插件的类型检查用相对路径读取旁边的 `deepseek-harness`。看文献和 PDF 还需要一份已经有论文的 Agentero Vault（含 `papers/` 和 `.agentero/catalog.sqlite`），以及本仓库上层 Motif 编出来的 `agentero-cli`。
+宿主仍然是上面的并列检出，供 `pnpm dsh` 启动源码版。插件自身的类型检查改用 npm 上的 `@deepseek-ai/*` 包，不再读取旁边的检出。看文献和 PDF 还需要一份已经有论文的 Agentero Vault（含 `papers/` 和 `.agentero/catalog.sqlite`），以及本仓库上层 Motif 编出来的 `agentero-cli`。
 
 先构建宿主、插件和 CLI：
 
@@ -55,7 +55,7 @@ cd ..
 cargo build -p agentero-cli
 ```
 
-宿主的 `pnpm run build` 生成仓库产物，之后 `pnpm dsh` 直接使用这些产物。已经构建过就可以跳过。插件的安装不再自动构建，改完代码后运行 `corepack pnpm build` 生成五个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。只做类型检查时运行 `corepack pnpm typecheck`，旁边的 `deepseek-harness` 检出要包含 `@deepseek-ai/dsh-client-ui-conversation` 的 `lib/types`，推荐卡片条注册的 `conversation.input.dock` 由它声明。
+宿主的 `pnpm run build` 生成仓库产物，之后 `pnpm dsh` 直接使用这些产物。已经构建过就可以跳过。插件的安装不再自动构建，改完代码后运行 `corepack pnpm build` 生成五个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。只做类型检查时运行 `corepack pnpm typecheck`；类型依赖钉在根 `devDependencies` 的 `@deepseek-ai/*` 0.2.2-alpha.2 上，升级宿主时同步改这里。
 
 五个包把 `@deepseek-ai/cordis` 放在 `peerDependencies`。根 `package.json` 用 `workspace:^` 依赖这五个包，`pnpm publish` 会把它写成具体版本。
 
@@ -158,17 +158,25 @@ corepack pnpm dsh web --patch ../agentero-dsh-plugin/dev.patch.yml --no-open
 
 插件按产物分发：发布时构建，用户装到的是 `lib/`，安装阶段不执行构建脚本，也不需要 `allowBuilds`。
 
-六个包同版本发布，`pnpm -r publish` 按拓扑顺序先发子包、再发根包：
+发布由 GitHub Actions 完成：推送 `v*` 标签后，`.github/workflows/release.yml` 会安装依赖、做类型检查、构建、校验标签与六个包的版本一致，然后按拓扑顺序先发子包、再发根包。仓库或组织的 Actions secrets 里需要有 `NPM_TOKEN`，它对 `@poco-ai` scope 有发布权限。
+
+发版步骤：
 
 ```sh
-corepack pnpm build
-corepack pnpm -r publish --registry=https://registry.npmjs.org
+corepack pnpm bump 0.1.1
+git add package.json pnpm-lock.yaml packages/*/package.json
+git commit -m "chore(release): v0.1.1"
+git tag v0.1.1
+git push origin main --tags
 ```
 
-根包的 `release` 脚本把这两步合在一起。发布前先登录官方源（国内镜像只读）：
+`bump` 会把根包和五个子包的版本一起改掉。带预发布后缀的版本（如 `0.1.1-beta.1`）会自动发到 `next` dist-tag，正式版发到 `latest`。
+
+本地手动发布（备用）：
 
 ```sh
 npm login --registry=https://registry.npmjs.org
+corepack pnpm release
 ```
 
 `npm publish` 只认 `--otp`。账号开了 2FA 时把验证码通过 `npm_config_otp` 传进去，例如 `npm_config_otp=123456 corepack pnpm release`。
@@ -190,7 +198,7 @@ npm login --registry=https://registry.npmjs.org
 dsh plugin --profile web add @poco-ai/agentero-dsh
 ```
 
-不要再从 `github:` 安装：根包构建依赖旁边的 `deepseek-harness` 类型检出，而且 pnpm 会拦截 Git 依赖的 `prepare`，用户的 profile 里没有对应的 `allowBuilds` 键。
+不要再从 `github:` 安装：Git 安装拿到的是源码，pnpm 会拦截 `prepare`，而用户 profile 里的 `allowBuilds` 键带有 commit hash、每次推送都会失效。npm 包里已经包含构建产物。
 
 ## 提交时不要带上
 
