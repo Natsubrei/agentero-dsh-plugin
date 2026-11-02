@@ -172,6 +172,15 @@ git push origin main --tags
 
 `bump` 会把根包和五个子包的版本一起改掉。带预发布后缀的版本（如 `0.1.1-beta.1`）会自动发到 `next` dist-tag，正式版发到 `latest`。
 
+npm 对非交互发布启用了 staged publishing：CI 上传成功只代表版本进了暂存队列，不会直接上线；未批准的版本显示为 `0.0.0-stage`，不能安装。上传后需要维护者在本地用 2FA 批准：
+
+```sh
+npx npm@latest stage list
+npx npm@latest stage approve <stage-id>
+```
+
+本地 npm 需要 11.15.0 或更新才有 `npm stage`（当前检出环境是 11.13，所以用 `npx npm@latest`），也可以在 npmjs.com 的包页面批准。六个包都要批。
+
 本地手动发布（备用）：
 
 ```sh
