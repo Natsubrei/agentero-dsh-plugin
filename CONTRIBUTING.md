@@ -161,10 +161,10 @@ corepack pnpm dsh web --patch ../agentero-dsh-plugin/dev.patch.yml --no-open
 发版步骤：
 
 ```sh
-corepack pnpm bump 0.1.1
+corepack pnpm bump 0.1.2
 git add package.json pnpm-lock.yaml packages/*/package.json
-git commit -m "chore(release): v0.1.1"
-git tag v0.1.1
+git commit -m "chore(release): v0.1.2"
+git tag v0.1.2
 git push origin main --tags
 ```
 

@@ -37,19 +37,10 @@ Agentero 是本地优先的科研工作台。这个插件把它的文献库、�
 agentero --help
 ```
 
-然后安装插件：
+插件已发布到 npm，直接安装：
 
 ```sh
 dsh plugin --profile web add @poco-ai/agentero-dsh
-```
-
-在 `~/.dsh/profiles/web/cordis.patch.yml` 里填 Vault 和 CLI 路径：
-
-```yaml
-- id: agentero-host
-  config:
-    vault: /path/to/vault
-    agenteroBin: /path/to/agentero
 ```
 
 启动：
@@ -58,16 +49,9 @@ dsh plugin --profile web add @poco-ai/agentero-dsh
 dsh web --no-open
 ```
 
-看到 `[agentero] plugin loaded` 后打开终端打印的链接。点侧边栏「更多」→「设置」→「Agentero」，填知识库目录和 Agentero CLI 的可执行文件位置；CLI 留空则使用 PATH 里的 `agentero`。
+看到 `[agentero] plugin loaded` 后打开终端打印的链接。点侧边栏「更多」→「设置」→「Agentero」，在设置页里选择知识库目录，并填写 Agentero CLI 的可执行文件位置。CLI 留空则使用 PATH 里的 `agentero`。
 
-也可以直接改 `~/.dsh/profiles/web/cordis.patch.yml`，适合脚本化部署：
-
-```yaml
-- id: agentero-host
-  config:
-    vault: /path/to/vault
-    agenteroBin: /path/to/agentero
-```
+配置会直接保存到当前 dsh profile，不需要手动编辑 `cordis.patch.yml`。
 
 ## 数据
 
