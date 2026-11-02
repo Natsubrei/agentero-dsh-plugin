@@ -130,17 +130,14 @@ interface PaperDir {
   real: string
 }
 
-/** Resolve a `papers/...` directory without following a link out of the vault. */
+/** Resolve the paper directory behind a `papers/...` directory or one of its PDF files. */
 async function paperDir(vault: string, ref: string): Promise<
   | { ok: true, dir: PaperDir }
   | { ok: false, status: 400 | 404, error: string }
 > {
   const located = await locateVaultPath(vault, ref)
   if (!located.ok) return located
-  const { root, relative, lexical } = located.location
-  if (relative !== 'papers' && !relative.startsWith('papers/')) {
-    return { ok: false, status: 400, error: INVALID_PATH }
-  }
+  const { root, lexical } = located.location
   let real: string
   try {
     real = await realpath(lexical)
@@ -152,8 +149,15 @@ async function paperDir(vault: string, ref: string): Promise<
   }
   if (!within(root, real, false)) return { ok: false, status: 400, error: INVALID_PATH }
   const stat = await lstat(real)
-  if (!stat.isDirectory()) return { ok: false, status: 400, error: INVALID_PATH }
-  return { ok: true, dir: { relative, real } }
+  // Chat links name the PDF file while the library names its directory; both
+  // address the same paper.
+  const directory = stat.isDirectory() ? real : stat.isFile() ? path.dirname(real) : undefined
+  if (directory === undefined || !within(root, directory, false)) return { ok: false, status: 400, error: INVALID_PATH }
+  const relative = path.relative(root, directory).split(path.sep).join('/')
+  if (relative !== 'papers' && !relative.startsWith('papers/')) {
+    return { ok: false, status: 400, error: INVALID_PATH }
+  }
+  return { ok: true, dir: { relative, real: directory } }
 }
 
 async function readAnnotations(dir: string): Promise<unknown[]> {

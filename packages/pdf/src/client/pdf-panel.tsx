@@ -169,8 +169,13 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
       if (cancelled) return
       setBytes(next)
       setStatus('ready')
-      const painted = await loadMarks(paperPath)
-      if (!cancelled) setMarks(painted)
+      try {
+        const painted = await loadMarks(paperPath)
+        if (!cancelled) setMarks(painted)
+      } catch {
+        // Marks live beside papers; a PDF opened elsewhere still renders.
+        if (!cancelled) setMarks([])
+      }
     }).catch((error: unknown) => {
       if (cancelled) return
       const text = error instanceof Error ? error.message : ''
