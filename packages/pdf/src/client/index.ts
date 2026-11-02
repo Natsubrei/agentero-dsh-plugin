@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
@@ -7,6 +8,7 @@ import { en, zh } from './locale'
 import { pdfChatActions } from './chat-actions'
 import { normalizeHighlightColor } from './palette'
 import { PdfPanel, PdfTitle, type PaintMark, type PdfInjected } from './pdf-panel'
+import { isAbsolutePath, joinPath, parseFileResource, resourceName, vaultRelative } from './resource-path'
 
 /** Right-sidebar tab identity. The body registers under this key. */
 const TAB_ID = 'agentero-dsh-pdf'
@@ -22,7 +24,7 @@ declare module '@deepseek-ai/cordis' {
     agentero: {
       registerOpener(kind: 'paper' | 'note', opener: (id: string) => void): () => void
       request(url: string, init?: RequestInit): Promise<Response>
-      getVault(): Promise<{ scope: string }>
+      getVault(): Promise<{ path: string, scope: string }>
     }
   }
 }
@@ -122,19 +124,44 @@ export const inject = ['slots', 'locale', 'agentero', 'sidebarRight', 'sidebarRi
 export function apply(ctx: Context): void {
   const source = ctx.agentero
   const request = source.request.bind(source)
+  let vaultPath: string | undefined
+  void source.getVault().then((info) => { vaultPath = info.path }).catch(() => {})
+
+  /**
+   * Vault-relative ref for a file address, or undefined when the address names
+   * no file this host can read. Agentero tools hand out vault-relative `papers/`
+   * paths, so those resolve against the vault even when the Session workspace
+   * is elsewhere; anything else resolves against the Session's working
+   * directory first.
+   */
+  const vaultRefOf = (address: string): string | undefined => {
+    const file = parseFileResource(address)
+    if (file === undefined || vaultPath === undefined) return undefined
+    if (file.scope === 'absolute') return vaultRelative(vaultPath, file.path)
+    if (file.path.startsWith('papers/')) return vaultRelative(vaultPath, joinPath(vaultPath, file.path))
+    const cwd = ctx.sessions.list.getSnapshot().byId[file.sessionId]?.cwd
+    if (cwd === undefined || cwd === '' || !isAbsolutePath(cwd)) return undefined
+    return vaultRelative(vaultPath, joinPath(cwd, file.path))
+  }
+
   ctx.effect(() => ctx.locale.register(NS, { zh, en }))
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.sidebarRightTabs.register({
     id: TAB_ID,
     kind: TAB_KIND,
     keepMounted: true,
-    title: () => t('title'),
+    // Claim vault PDFs at the extension band so the builtin text preview stops
+    // drawing them. Addresses outside the vault stay with the builtin viewer.
+    patterns: ['*.pdf'],
+    canOpen: address => vaultRefOf(address) !== undefined,
+    title: address => resourceName(address) ?? t('title'),
   }))
   ctx.effect(() => ctx.agentero.registerOpener('paper', (id) => {
     ctx.sidebarRight.openTab(TAB_KIND, { params: { ref: id } })
   }))
 
   const face: Omit<PdfInjected, 'ask'> = {
+    resolveAddress: address => vaultRefOf(address) ?? '',
     async loadPdf(ref) {
       const response = await request(`/agentero/api/pdf?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
       if (!response.ok) {

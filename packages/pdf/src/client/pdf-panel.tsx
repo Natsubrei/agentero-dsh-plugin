@@ -6,6 +6,7 @@ import type { EditableBookmark } from './bookmark'
 import { type PdfPaperTone } from './page-theme'
 import { DEFAULT_HIGHLIGHT_COLOR, type HighlightColor } from './palette'
 import { PDF_FLOAT_CARD } from './pdf-chrome-surface'
+import { resourceName } from './resource-path'
 import { SelectionMenu } from './selection-menu'
 import { TranslateCard } from './translate-card'
 
@@ -57,6 +58,8 @@ export interface PdfInjected {
   loadPdf: (ref: string) => Promise<ArrayBuffer>
   loadMarks: (ref: string) => Promise<PaintMark[]>
   addMark: (body: MarkAdd) => Promise<string | undefined>
+  /** Vault-relative ref for a file-resource address, or an empty string outside the vault. */
+  resolveAddress: (address: string) => string
   /** Send a question and citation as a new conversation turn. */
   ask: (text: string) => Promise<void>
   /** Write the PDF outline back to the file; resolves after the host saved it. */
@@ -104,14 +107,16 @@ export function paperRef(params: unknown): string {
 }
 
 export function PdfTitle({ useTabInfo, t }: PropsRuntime<'sidebar.right.pane.tab.title'> & PropsLocale<'agentero.pdf'>): ReactNode {
-  const ref = paperRef(useTabInfo().tab.navigation.params)
-  const name = ref.split('/').filter(part => part !== '').pop()
+  const navigation = useTabInfo().tab.navigation
+  const ref = paperRef(navigation.params)
+  const name = ref !== '' ? ref.split('/').filter(part => part !== '').pop() : resourceName(navigation.address)
   return <span>{name === undefined || name === '' ? t('title') : name}</span>
 }
 
 export function PdfPanel(props: PdfPanelProps): ReactNode {
-  const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, ask, saveBookmarks, translate, loadLayout } = props
-  const paperPath = paperRef(useTabInfo().tab.navigation.params)
+  const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, ask, saveBookmarks, translate, loadLayout, resolveAddress } = props
+  const navigation = useTabInfo().tab.navigation
+  const paperPath = paperRef(navigation.params) || resolveAddress(navigation.address)
   const [status, setStatus] = useState<'empty' | 'loading' | 'missing' | 'error' | 'ready'>('empty')
   const [message, setMessage] = useState('')
   const [bytes, setBytes] = useState<ArrayBuffer | undefined>(undefined)
