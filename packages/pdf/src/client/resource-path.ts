@@ -11,6 +11,54 @@
 /** The scheme and type every file address opens with. */
 const FILE_PREFIX = 'dsh-resource://file/'
 
+/**
+ * Addresses that name a whole paper rather than one file.
+ *
+ * The panel reads and writes a paper through its directory, and a right-sidebar
+ * tab keeps only its address across reloads — navigation parameters are not part
+ * of the persisted layout. Naming the paper in the address therefore keeps a
+ * restored tab pointing at the same paper.
+ */
+const PAPER_PREFIX = 'dsh-resource://agentero-paper/'
+
+/**
+ * Address that opens one vault paper.
+ * @param ref - vault-relative paper directory, such as `papers/group/2604.15588`.
+ * @returns its `dsh-resource://agentero-paper/...` address.
+ */
+export function paperAddress(ref: string): string {
+  const segments = ref.split('/').filter(part => part !== '')
+  return PAPER_PREFIX + segments.map(encodeURIComponent).join('/')
+}
+
+/**
+ * Paper directory an address names.
+ * @param address - candidate address.
+ * @returns the vault-relative ref, or undefined for another resource or a malformed address.
+ */
+export function parsePaperAddress(address: string): string | undefined {
+  if (!address.startsWith(PAPER_PREFIX)) return undefined
+  const end = address.search(/[?#]/)
+  const rest = address.slice(PAPER_PREFIX.length, end === -1 ? undefined : end)
+  if (rest === '') return undefined
+  try {
+    return rest.split('/').map(decodeURIComponent).join('/')
+  } catch {
+    // decodeURIComponent throws on a malformed escape; such an address names nothing.
+    return undefined
+  }
+}
+
+/**
+ * Final segment of a slash-separated path.
+ * @param path - any path or ref.
+ * @returns the last non-empty segment, or undefined when there is none.
+ */
+export function lastSegment(path: string): string | undefined {
+  const segments = path.split('/').filter(part => part !== '')
+  return segments[segments.length - 1]
+}
+
 /** A file address split into its scope and decoded path. */
 export type FileResource =
   | {

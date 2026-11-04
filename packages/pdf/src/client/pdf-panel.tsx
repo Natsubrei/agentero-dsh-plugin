@@ -6,7 +6,7 @@ import type { EditableBookmark } from './bookmark'
 import { type PdfPaperTone } from './page-theme'
 import { DEFAULT_HIGHLIGHT_COLOR, type HighlightColor } from './palette'
 import { PDF_FLOAT_CARD } from './pdf-chrome-surface'
-import { resourceName } from './resource-path'
+import { lastSegment, parsePaperAddress, resourceName } from './resource-path'
 import { SelectionMenu } from './selection-menu'
 import { TranslateCard } from './translate-card'
 
@@ -100,23 +100,17 @@ interface TranslateCardState {
   error: string
 }
 
-export function paperRef(params: unknown): string {
-  if (params === null || typeof params !== 'object' || !('ref' in params)) return ''
-  const ref = params.ref
-  return typeof ref === 'string' ? ref : ''
-}
-
 export function PdfTitle({ useTabInfo, t }: PropsRuntime<'sidebar.right.pane.tab.title'> & PropsLocale<'agentero.pdf'>): ReactNode {
-  const navigation = useTabInfo().tab.navigation
-  const ref = paperRef(navigation.params)
-  const name = ref !== '' ? ref.split('/').filter(part => part !== '').pop() : resourceName(navigation.address)
+  const { address } = useTabInfo().tab.navigation
+  const paper = parsePaperAddress(address)
+  const name = paper === undefined ? resourceName(address) : lastSegment(paper)
   return <span>{name === undefined || name === '' ? t('title') : name}</span>
 }
 
 export function PdfPanel(props: PdfPanelProps): ReactNode {
   const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, ask, saveBookmarks, translate, loadLayout, resolveAddress } = props
   const navigation = useTabInfo().tab.navigation
-  const paperPath = paperRef(navigation.params) || resolveAddress(navigation.address)
+  const paperPath = parsePaperAddress(navigation.address) ?? resolveAddress(navigation.address)
   const [status, setStatus] = useState<'empty' | 'loading' | 'missing' | 'error' | 'ready'>('empty')
   const [message, setMessage] = useState('')
   const [bytes, setBytes] = useState<ArrayBuffer | undefined>(undefined)

@@ -9,7 +9,7 @@ import { en, zh } from './locale'
 import { pdfChatActions } from './chat-actions'
 import { normalizeHighlightColor } from './palette'
 import { PdfPanel, PdfTitle, type PaintMark, type PdfInjected } from './pdf-panel'
-import { isAbsolutePath, joinPath, parseFileResource, resourceName, vaultRelative } from './resource-path'
+import { isAbsolutePath, joinPath, lastSegment, paperAddress, parseFileResource, parsePaperAddress, resourceName, vaultRelative } from './resource-path'
 
 /** Right-sidebar tab identity. The body registers under this key. */
 const TAB_ID = 'agentero-dsh-pdf'
@@ -27,13 +27,6 @@ declare module '@deepseek-ai/cordis' {
       request(url: string, init?: RequestInit): Promise<Response>
       getVault(): Promise<{ path: string, scope: string }>
     }
-  }
-}
-
-declare module '@deepseek-ai/dsh-client-ui-sidebar-right/client' {
-  interface SidebarRightTabParamsMap {
-    /** Paper directory passed when the library opens this page. */
-    'agentero.pdf': { readonly ref?: string }
   }
 }
 
@@ -152,13 +145,17 @@ export function apply(ctx: Context): void {
     kind: TAB_KIND,
     keepMounted: true,
     // Claim vault PDFs at the extension band so the builtin text preview stops
-    // drawing them. Addresses outside the vault stay with the builtin viewer.
-    patterns: ['*.pdf'],
-    canOpen: address => vaultRefOf(address) !== undefined,
-    title: address => resourceName(address) ?? t('title'),
+    // drawing them, and the paper addresses the library opens. Other addresses
+    // stay with the builtin viewer.
+    patterns: ['*.pdf', 'dsh-resource://agentero-paper/**'],
+    canOpen: address => parsePaperAddress(address) !== undefined || vaultRefOf(address) !== undefined,
+    title: address => {
+      const paper = parsePaperAddress(address)
+      return (paper === undefined ? resourceName(address) : lastSegment(paper)) ?? t('title')
+    },
   }))
   ctx.effect(() => ctx.agentero.registerOpener('paper', (id) => {
-    ctx.sidebarRight.openTab(TAB_KIND, { params: { ref: id } })
+    ctx.sidebarRight.openResource(paperAddress(id))
   }))
 
   const face: Omit<PdfInjected, 'ask'> = {
