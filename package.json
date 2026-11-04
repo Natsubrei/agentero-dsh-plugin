@@ -1,6 +1,6 @@
 {
   "name": "@poco-ai/agentero-dsh",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "DeepSeek Harness bundle that connects Agentero to dsh",
   "type": "module",
   "packageManager": "pnpm@11.28.5",
