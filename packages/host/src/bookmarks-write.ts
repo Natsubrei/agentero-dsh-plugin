@@ -5,15 +5,19 @@
  * destinations, actions and styling survive; refuse signed documents because
  * rewriting them would invalidate the signature.
  */
-import {
-  PDFDict,
-  PDFDocument,
-  PDFHexString,
-  PDFName,
-  PDFNumber,
-  PDFRef,
-  PDFString,
-} from 'pdf-lib'
+import { createRequire } from 'node:module'
+import type { PDFDict as PDFDictType, PDFRef as PDFRefType } from 'pdf-lib'
+
+const require = createRequire(import.meta.url)
+
+/**
+ * Load pdf-lib through Node's CommonJS loader instead of the DSH module loader.
+ * pdf-lib's barrel modules rely on live CommonJS exports during initialization;
+ * loading them through DSH can expose a partial utils module and fail activation.
+ */
+function loadPdfLib(): typeof import('pdf-lib') {
+  return require('pdf-lib') as typeof import('pdf-lib')
+}
 
 /** One outline node as the browser sends it. */
 export interface BookmarkNode {
@@ -102,6 +106,15 @@ export async function writePdfBookmarks(
   bytes: Uint8Array,
   nodes: BookmarkNode[],
 ): Promise<Uint8Array> {
+  const {
+    PDFDict,
+    PDFDocument,
+    PDFHexString,
+    PDFName,
+    PDFNumber,
+    PDFRef,
+    PDFString,
+  } = loadPdfLib()
   const pdf = await PDFDocument.load(bytes, { updateMetadata: false })
   const name = PDFName.of
   for (const [, object] of pdf.context.enumerateIndirectObjects()) {
@@ -112,10 +125,10 @@ export async function writePdfBookmarks(
       throw new Error('protected')
     }
   }
-  const originals = new Map<string, { dict: PDFDict, ref: PDFRef }>()
+  const originals = new Map<string, { dict: PDFDictType, ref: PDFRefType }>()
   const seen = new Set<string>()
   const root = pdf.catalog.lookupMaybe(name('Outlines'), PDFDict)
-  function read(parent: PDFDict, prefix: string): void {
+  function read(parent: PDFDictType, prefix: string): void {
     let item = parent.get(name('First'))
     let index = 0
     while (item) {
@@ -137,7 +150,7 @@ export async function writePdfBookmarks(
   const rootRef = pdf.context.getObjectRef(outlines) ?? pdf.context.register(outlines)
   const pages = pdf.getPages()
   const used = new Set<string>()
-  function write(items: BookmarkNode[], parent: PDFDict, parentRef: PDFRef): number {
+  function write(items: BookmarkNode[], parent: PDFDictType, parentRef: PDFRefType): number {
     const entries = items.map((node) => {
       if (!node.title.trim()) throw new Error('invalid')
       if (
