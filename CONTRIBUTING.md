@@ -35,7 +35,7 @@ motif/
 - Git 2.26 或更新。
 - 调用模型时再准备 DeepSeek API key。只验证插件是否加载时不需要。
 
-当前宿主源码版本见 `deepseek-harness/package.json`（检出时为 `0.2.2-alpha.2`）。本包用 `engines.dsh` 声明 `>=0.2.1-rc.5 <0.3.0`。DSH 仍在开发者预览，升级宿主后如果安装被拒绝，先收紧这个范围再重试。
+当前宿主源码版本见 `deepseek-harness/package.json`（检出时为 `0.2.2-alpha.3`）。本包用 `engines.dsh` 声明 `>=0.2.1-rc.5 <0.3.0`。DSH 仍在开发者预览，升级宿主后如果安装被拒绝，先收紧这个范围再重试。
 
 ## 体验
 
@@ -55,7 +55,7 @@ cd ..
 cargo build -p agentero-cli
 ```
 
-宿主的 `pnpm run build` 生成仓库产物，之后 `pnpm dsh` 直接使用这些产物。已经构建过就可以跳过。插件的安装不再自动构建，改完代码后运行 `corepack pnpm build` 生成四个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。只做类型检查时运行 `corepack pnpm typecheck`；类型依赖钉在根 `devDependencies` 的 `@deepseek-ai/*` 0.2.2-alpha.2 上，升级宿主时同步改这里。
+宿主的 `pnpm run build` 生成仓库产物，之后 `pnpm dsh` 直接使用这些产物。已经构建过就可以跳过。插件的安装不再自动构建，改完代码后运行 `corepack pnpm build` 生成四个包的 Node 入口和浏览器 client bundle。`lib/` 和 `node_modules/` 不提交。只做类型检查时运行 `corepack pnpm typecheck`；类型依赖钉在根 `devDependencies` 的 `@deepseek-ai/*` 0.2.2-alpha.3 上，升级宿主时同步改这里。
 
 四个包把 `@deepseek-ai/cordis` 放在 `peerDependencies`。根 `package.json` 用 `workspace:^` 依赖这四个包，`pnpm publish` 会把它写成具体版本。
 
