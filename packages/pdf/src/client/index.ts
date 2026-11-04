@@ -4,6 +4,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { en, zh } from './locale'
 import { pdfChatActions } from './chat-actions'
 import { normalizeHighlightColor } from './palette'
@@ -139,7 +140,7 @@ export function apply(ctx: Context): void {
     if (file === undefined || vaultPath === undefined) return undefined
     if (file.scope === 'absolute') return vaultRelative(vaultPath, file.path)
     if (file.path.startsWith('papers/')) return vaultRelative(vaultPath, joinPath(vaultPath, file.path))
-    const cwd = ctx.sessions.list.getSnapshot().byId[file.sessionId]?.cwd
+    const cwd = ctx.sessions.list.getSnapshot().byId[file.sessionId as SessionId]?.cwd
     if (cwd === undefined || cwd === '' || !isAbsolutePath(cwd)) return undefined
     return vaultRelative(vaultPath, joinPath(cwd, file.path))
   }
