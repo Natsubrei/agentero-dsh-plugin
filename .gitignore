@@ -4,3 +4,4 @@ lib/
 .DS_Store
 dev.patch.yml
 .spec-workflow/
+.pnpm-store/
