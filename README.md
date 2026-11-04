@@ -40,7 +40,7 @@ agentero --help
 插件已发布到 npm，直接安装：
 
 ```sh
-dsh plugin --profile web add @poco-ai/agentero-dsh
+dsh plugin --profile web add agentero-dsh
 ```
 
 启动：

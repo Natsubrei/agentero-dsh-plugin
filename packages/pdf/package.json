@@ -1,9 +1,6 @@
 {
-  "name": "@poco-ai/agentero-dsh-pdf",
+  "name": "agentero-dsh-pdf",
   "version": "0.1.4",
-  "publishConfig": {
-    "access": "public"
-  },
   "description": "Agentero PDF panel for DeepSeek Harness",
   "type": "module",
   "main": "./lib/index.js",
@@ -27,7 +24,7 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@poco-ai/agentero-dsh-host"
+        "agentero-dsh-host"
       ]
     }
   },
