@@ -1,6 +1,6 @@
 # Agentero × DeepSeek Harness
 
-Agentero 是本地优先的科研工作台。这个插件把它的文献库、笔记和 PDF 阅读器带进 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（下称 dsh），让 Agent 和你坐在同一个窗口里做科研：你读论文、做判断，Agent 帮你查资料、翻笔记、整理结论。所有资料都留在自己的本地。
+[Agentero](https://github.com/poco-ai/Agentero) 是本地优先的科研工作台。这个插件把它的文献库、笔记和 PDF 阅读器带进 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（下称 dsh），让 Agent 和你坐在同一个窗口里做科研：你读论文、做判断，Agent 帮你查资料、翻笔记、整理结论。所有资料都留在自己的本地。
 
 ![文献库与 PDF 阅读](assets/pdf-library.png)
 
@@ -48,6 +48,8 @@ dsh web --no-open
 - **Agentero CLI**：点右侧「安装」会从 GitHub Release 下载与本机匹配的官方 CLI，校验 SHA-256 后写入用户目录，并把可执行文件路径填好。桌面端已经装过 CLI 时可直接复用。
 - **新建知识库**：选择一个目录，插件调用 `agentero vault create` 生成 `papers/`、`notes/`、`.agentero/catalog.sqlite` 等结构并切换过去。已有 Vault 仍用「选择目录」打开。
 
+![在 dsh 设置中查看 CLI 状态、创建知识库，并进入 Agentero 桌面版](assets/settings.png)
+
 也可以手动安装 CLI：在 Agentero 桌面端打开「设置 → 关于 → 安装 CLI」，或参考 [CONTRIBUTING.md](CONTRIBUTING.md) 本地构建。确认终端里能运行：
 
 ```sh
@@ -58,7 +60,13 @@ agentero --help
 
 ## 数据
 
-论文、PDF、笔记和标注都留在 Vault 里，和 Agentero 桌面端共用。插件只在本机运行，不另建数据库。
+论文、PDF、笔记和标注都留在 Vault 里，和 [Agentero 桌面端](https://github.com/poco-ai/Agentero) 共用。插件只在本机运行，不另建数据库。
+
+## 桌面版
+
+插件把 Agentero 的 Vault 带进 dsh；[Agentero 桌面版](https://github.com/poco-ai/Agentero) 提供完整的本地工作台：文献管理、PDF 标注、OCR、全文翻译、写作与 Agent 协作。两边共用同一个 Vault，可以按场景切换。
+
+[下载 Agentero 桌面版](https://github.com/poco-ai/Agentero/releases/latest)
 
 ## 已知限制
 

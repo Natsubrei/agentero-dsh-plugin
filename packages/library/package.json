@@ -5,6 +5,7 @@
     "access": "public"
   },
   "description": "Agentero library panel for DeepSeek Harness",
+  "homepage": "https://github.com/poco-ai/Agentero",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
