@@ -76,3 +76,11 @@ agentero --help
 ## 开发
 
 见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 交流反馈
+
+<p align="center">
+  <img src="assets/community-qr.png" alt="Agentero 交流群二维码" width="240" />
+  <br/>
+  <sub>扫码加入微信群；也可以到 <a href="https://github.com/poco-ai/Agentero/issues">Agentero Issues</a> 反馈。二维码 7 天内有效。</sub>
+</p>
