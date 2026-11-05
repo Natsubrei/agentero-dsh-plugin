@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { AgenteroSettingsFace } from './settings-model'
 import { Button, buttonVariants } from '@/ui/button'
 import { Input } from '@/ui/input'
+import { cn } from '@/utils'
 
 /** Vault facts the page reads before offering the native picker. */
 export interface SettingsVault {
@@ -340,7 +341,7 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
         </div>
         <div className="flex items-center gap-2">
           <a
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'no-underline')}
             href="https://github.com/poco-ai/Agentero"
             target="_blank"
             rel="noreferrer"
@@ -348,7 +349,7 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
             <Github aria-hidden />{t('promoGithub')}
           </a>
           <a
-            className={buttonVariants({ variant: 'default', size: 'sm' })}
+            className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'no-underline')}
             href="https://github.com/poco-ai/Agentero/releases/latest"
             target="_blank"
             rel="noreferrer"
