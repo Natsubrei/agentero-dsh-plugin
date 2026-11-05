@@ -206,11 +206,10 @@ export function apply(ctx: Context): void {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
       })
       const body = await bodyOf(response)
-      if (!response.ok || body === null || typeof body !== 'object'
-        || !('status' in body) || body.status === null || typeof body.status !== 'object') {
+      if (!response.ok || body === null || typeof body !== 'object') {
         throw new Error(failureText(body) ?? 'CLI install failed')
       }
-      return body.status as SettingsCliStatus
+      return body as SettingsCliStatus
     },
     reload() { window.location.reload() },
   }

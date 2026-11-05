@@ -1,6 +1,6 @@
 /** Agentero's section in the dsh Settings dialog. */
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { AlertCircle, BookOpen, Check, Download, FolderOpen, FolderPlus, Github } from 'lucide-react'
+import { AlertCircle, BookOpen, Check, Download, FolderOpen, FolderPlus, Github, LoaderCircle } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { AgenteroSettingsFace } from './settings-model'
 import { Button, buttonVariants } from '@/ui/button'
@@ -28,6 +28,8 @@ export interface SettingsCliStatus {
   canInstall: boolean
   platform: string | null
   releasePageUrl: string
+  installing: boolean
+  installError: string | null
 }
 
 /** Host calls the page uses for the vault; the CLI field persists through the form face. */
@@ -52,7 +54,7 @@ export type SettingsLocaleKey =
   | 'createVault' | 'creating' | 'createFailed'
   | 'cliTitle' | 'cliPlaceholder' | 'save' | 'saving' | 'saved' | 'saveFailed' | 'reset'
   | 'cliChecking' | 'cliReady' | 'cliMissing' | 'cliStatusFailed' | 'install' | 'installing' | 'installFailed'
-  | 'promoTitle' | 'promoDescription' | 'promoGithub' | 'promoDownload'
+  | 'promoTitle' | 'promoDescription' | 'promoGithub'
   | 'loadFailed' | 'unavailable'
 
 export const en: Record<SettingsLocaleKey, string> = {
@@ -83,7 +85,6 @@ export const en: Record<SettingsLocaleKey, string> = {
   promoTitle: 'Agentero for desktop',
   promoDescription: 'A local-first research workbench for papers, PDF reading, notes, and citations.',
   promoGithub: 'GitHub',
-  promoDownload: 'Download',
   loadFailed: 'Could not read the current knowledge base.',
   unavailable: 'These settings are not available in this deployment.',
 }
@@ -116,7 +117,6 @@ export const zh: Record<SettingsLocaleKey, string> = {
   promoTitle: 'Agentero 桌面版',
   promoDescription: '本地优先的科研工作台：论文、PDF 阅读、笔记与引用集中在一处。',
   promoGithub: 'GitHub',
-  promoDownload: '下载',
   loadFailed: '无法读取当前知识库。',
   unavailable: '当前部署不提供这项设置。',
 }
@@ -196,7 +196,22 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
     return () => { cancelled = true }
   }, [saved, props.loadCli])
 
+  useEffect(() => {
+    if (cli?.installing !== true) return
+    let cancelled = false
+    const timer = setInterval(() => {
+      props.loadCli().then((status) => {
+        if (!cancelled) setCli(status)
+      }).catch(() => {
+        // Keep the last known state; the next tick retries.
+      })
+    }, 2_000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [cli?.installing, props.loadCli])
+
   const busy = picking || applying || creating
+  const installingCli = installing || cli?.installing === true
+  const cliFailure = cliError !== '' ? cliError : cli?.installError ?? ''
   const draft = vaultDraft.trim()
   const vaultReady = draft !== '' && draft !== vault && !busy
   const disabled = !state.writable || state.saving
@@ -251,6 +266,8 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
       setCli(await props.installCli())
     } catch (error) {
       setCliError(messageOf(error, t('installFailed')))
+      // The POST may have reached the Host even when the response was lost.
+      try { setCli(await props.loadCli()) } catch { /* keep the request error */ }
     } finally {
       setInstalling(false)
     }
@@ -286,23 +303,27 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
       <div className="flex items-center justify-between gap-2">
         <h3 className="m-0 text-[0.875rem] font-normal">{t('cliTitle')}</h3>
         <div className="flex items-center gap-2">
-          {cli === null
-            ? <span className="text-xs text-muted-foreground">{cliLoading ? t('cliChecking') : t('cliStatusFailed')}</span>
-            : cli.available
-              ? <span className="flex items-center gap-1 text-xs text-muted-foreground" title={cli.bin ?? undefined}>
-                <Check className="size-3" aria-hidden />{t('cliReady')}{cli.version === null ? '' : ` · v${cli.version}`}
-              </span>
-              : <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <AlertCircle className="size-3" aria-hidden />{t('cliMissing')}
-              </span>}
-          {state.available
+          {cli?.installing === true
+            ? <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <LoaderCircle className="size-3 animate-spin" aria-hidden />{t('installing')}
+            </span>
+            : cli === null
+              ? <span className="text-xs text-muted-foreground">{cliLoading ? t('cliChecking') : t('cliStatusFailed')}</span>
+              : cli.available
+                ? <span className="flex items-center gap-1 text-xs text-muted-foreground" title={cli.bin ?? undefined}>
+                  <Check className="size-3" aria-hidden />{t('cliReady')}{cli.version === null ? '' : ` · v${cli.version}`}
+                </span>
+                : <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <AlertCircle className="size-3" aria-hidden />{t('cliMissing')}
+                </span>}
+          {state.available && cli?.available !== true
             ? <Button
               type="button"
               size="sm"
-              disabled={installing || (cli !== null && !cli.canInstall)}
+              disabled={installingCli || (cli !== null && !cli.canInstall)}
               onClick={() => { void installCli() }}
             >
-              <Download aria-hidden />{installing ? t('installing') : t('install')}
+              <Download aria-hidden />{installingCli ? t('installing') : t('install')}
             </Button>
             : null}
         </div>
@@ -326,38 +347,26 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
             {state.saving ? t('saving') : t('save')}
           </Button>
         </div>}
-      {cliError !== '' ? <p role="status" className="text-xs text-destructive">{cliError}</p> : null}
+      {cliFailure !== '' ? <p role="status" className="text-xs text-destructive">{cliFailure}</p> : null}
       {state.failed ? <p role="status" className="text-xs text-destructive">{t('saveFailed')}</p> : null}
       {saved && !state.failed ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><Check className="size-3" aria-hidden />{t('saved')}</p> : null}
     </section>
 
     <section className="rounded-xl border border-border bg-muted/30 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="m-0 flex items-center gap-2 text-[0.875rem] font-normal">
-            <BookOpen className="size-4" aria-hidden />{t('promoTitle')}
-          </h3>
-          <p className="m-0 mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">{t('promoDescription')}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <a
-            className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'no-underline')}
-            href="https://github.com/poco-ai/Agentero"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Github aria-hidden />{t('promoGithub')}
-          </a>
-          <a
-            className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'no-underline')}
-            href="https://github.com/poco-ai/Agentero/releases/latest"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Download aria-hidden />{t('promoDownload')}
-          </a>
-        </div>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="m-0 flex items-center gap-2 text-[0.875rem] font-normal">
+          <BookOpen className="size-4" aria-hidden />{t('promoTitle')}
+        </h3>
+        <a
+          className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'no-underline')}
+          href="https://github.com/poco-ai/Agentero"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <Github aria-hidden />{t('promoGithub')}
+        </a>
       </div>
+      <p className="m-0 mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">{t('promoDescription')}</p>
     </section>
   </div>
 }

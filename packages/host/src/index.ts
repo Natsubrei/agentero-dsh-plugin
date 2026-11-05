@@ -188,6 +188,19 @@ interface SettingsLike {
   mutate(namespace: string, ops: { op: 'set', path: string[], value: unknown }[]): Promise<void>
 }
 
+/** One install at a time; the settings page polls status while it runs. */
+interface CliInstallState {
+  running: boolean
+  error: string | null
+}
+
+function cliPayload(
+  status: Awaited<ReturnType<typeof cliStatus>>,
+  state: CliInstallState,
+): Awaited<ReturnType<typeof cliStatus>> & { installing: boolean, installError: string | null } {
+  return { ...status, installing: state.running, installError: state.error }
+}
+
 /** Host header name without the port. Bracketed IPv6 keeps the address inside the brackets. */
 function hostName(header: string | undefined): string | undefined {
   if (header === undefined) return undefined
@@ -898,6 +911,7 @@ async function handleCliStatus(
   settings: HostSettings,
   req: IncomingMessage,
   res: ServerResponse,
+  state: CliInstallState,
 ): Promise<void> {
   if (req.method !== 'GET') {
     res.statusCode = 405
@@ -905,7 +919,7 @@ async function handleCliStatus(
     res.end()
     return
   }
-  sendJson(res, 200, await cliStatus(settings))
+  sendJson(res, 200, cliPayload(await cliStatus(settings), state))
 }
 
 async function handleCliInstall(
@@ -913,9 +927,20 @@ async function handleCliInstall(
   req: IncomingMessage,
   res: ServerResponse,
   persistBin: (bin: string) => Promise<void>,
+  state: CliInstallState,
 ): Promise<void> {
   if (!requirePost(req, res) || !trustedJsonRequest(req, res)) return
-  sendJson(res, 200, { status: await installManagedCli(settings, persistBin) })
+  if (!state.running) {
+    state.running = true
+    state.error = null
+    void installManagedCli(settings, persistBin).catch((error: unknown) => {
+      state.error = error instanceof Error && error.message !== '' ? error.message : String(error)
+    }).finally(() => {
+      state.running = false
+    })
+  }
+  // The download can outlive proxy/browser timeouts; the page polls GET /cli instead.
+  sendJson(res, 202, cliPayload(await cliStatus(settings), state))
 }
 
 async function handleVaultCreate(
@@ -1120,6 +1145,7 @@ async function handleApi(
   vaultHost: VaultHost,
   translate: TranslateText,
   persistBin: (bin: string) => Promise<void>,
+  cliState: CliInstallState,
 ): Promise<void> {
   if (!isLoopbackHost(req.headers.host)) {
     res.statusCode = 403
@@ -1138,11 +1164,11 @@ async function handleApi(
     return
   }
   if (pathname === CLI_STATUS_PATH) {
-    await handleCliStatus(settings, req, res)
+    await handleCliStatus(settings, req, res, cliState)
     return
   }
   if (pathname === CLI_INSTALL_PATH) {
-    await handleCliInstall(settings, req, res, persistBin)
+    await handleCliInstall(settings, req, res, persistBin, cliState)
     return
   }
   if (pathname === VAULT_CREATE_PATH) {
@@ -1289,6 +1315,7 @@ export function apply(ctx: Context, config?: Config): void {
     const writer = ctx.get('settings') as SettingsLike
     await writer.mutate('agentero-host', [{ op: 'set', path: ['agenteroBin'], value: bin }])
   }
+  const cliState: CliInstallState = { running: false, error: null }
   ctx.effect(() => {
     console.log('[agentero] plugin loaded')
     const children = new Set<ChildProcess>()
@@ -1300,7 +1327,7 @@ export function apply(ctx: Context, config?: Config): void {
     const route: WebRoute = {
       kind: 'prefix',
       path: API_PREFIX,
-      handler: (req, res) => handleApi(settings, agents, req, res, children, vaultHost, translate, persistBin).catch((error: unknown) => {
+      handler: (req, res) => handleApi(settings, agents, req, res, children, vaultHost, translate, persistBin, cliState).catch((error: unknown) => {
         if (res.headersSent) return
         const message = error instanceof Error ? error.message : String(error)
         sendJson(res, 502, { error: message })
