@@ -1,9 +1,9 @@
 /** Agentero's section in the dsh Settings dialog. */
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { Check, FolderOpen } from 'lucide-react'
+import { AlertCircle, BookOpen, Check, Download, FolderOpen, FolderPlus, Github } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { AgenteroSettingsFace } from './settings-model'
-import { Button } from '@/ui/button'
+import { Button, buttonVariants } from '@/ui/button'
 import { Input } from '@/ui/input'
 
 /** Vault facts the page reads before offering the native picker. */
@@ -12,11 +12,31 @@ export interface SettingsVault {
   canPick: boolean
 }
 
+/** Local CLI state reported by the Host; mirrors `cliStatus` on the Node side. */
+export interface SettingsCliStatus {
+  available: boolean
+  version: string | null
+  bin: string | null
+  source: 'configured' | 'managed' | null
+  configured: string
+  managedPath: string
+  managedInstalled: boolean
+  shimPath: string
+  shimInstalled: boolean
+  shimOnPath: boolean
+  canInstall: boolean
+  platform: string | null
+  releasePageUrl: string
+}
+
 /** Host calls the page uses for the vault; the CLI field persists through the form face. */
 export interface SettingsFace {
   loadVault(): Promise<SettingsVault>
   pickVault(): Promise<string | null>
   saveVault(path: string): Promise<void>
+  createVault(path: string): Promise<void>
+  loadCli(): Promise<SettingsCliStatus>
+  installCli(): Promise<SettingsCliStatus>
   reload(): void
 }
 
@@ -28,7 +48,10 @@ export type AgenteroSettingsProps =
 
 export type SettingsLocaleKey =
   | 'nav' | 'vaultTitle' | 'vaultPlaceholder' | 'choose' | 'apply' | 'applying' | 'invalidVault'
+  | 'createVault' | 'creating' | 'createFailed'
   | 'cliTitle' | 'cliPlaceholder' | 'save' | 'saving' | 'saved' | 'saveFailed' | 'reset'
+  | 'cliChecking' | 'cliReady' | 'cliMissing' | 'cliStatusFailed' | 'install' | 'installing' | 'installFailed'
+  | 'promoTitle' | 'promoDescription' | 'promoGithub' | 'promoDownload'
   | 'loadFailed' | 'unavailable'
 
 export const en: Record<SettingsLocaleKey, string> = {
@@ -39,6 +62,9 @@ export const en: Record<SettingsLocaleKey, string> = {
   apply: 'Apply',
   applying: 'Applying…',
   invalidVault: 'Choose an existing Agentero Vault folder.',
+  createVault: 'New vault',
+  creating: 'Creating…',
+  createFailed: 'Could not create the vault.',
   cliTitle: 'Agentero CLI',
   cliPlaceholder: 'agentero',
   save: 'Save',
@@ -46,6 +72,17 @@ export const en: Record<SettingsLocaleKey, string> = {
   saved: 'Saved',
   saveFailed: 'The Host did not accept this change.',
   reset: 'Reset to default',
+  cliChecking: 'Checking…',
+  cliReady: 'Ready',
+  cliMissing: 'Not found',
+  cliStatusFailed: 'Could not read the CLI status.',
+  install: 'Install',
+  installing: 'Installing…',
+  installFailed: 'Could not install the CLI.',
+  promoTitle: 'Agentero for desktop',
+  promoDescription: 'A local-first research workbench for papers, PDF reading, notes, and citations.',
+  promoGithub: 'GitHub',
+  promoDownload: 'Download',
   loadFailed: 'Could not read the current knowledge base.',
   unavailable: 'These settings are not available in this deployment.',
 }
@@ -58,6 +95,9 @@ export const zh: Record<SettingsLocaleKey, string> = {
   apply: '应用',
   applying: '应用中…',
   invalidVault: '请选择一个有效的 Agentero Vault 目录。',
+  createVault: '新建知识库',
+  creating: '创建中…',
+  createFailed: '无法创建知识库。',
   cliTitle: 'Agentero CLI',
   cliPlaceholder: 'agentero',
   save: '保存',
@@ -65,6 +105,17 @@ export const zh: Record<SettingsLocaleKey, string> = {
   saved: '已保存',
   saveFailed: 'Host 没有接受这次修改。',
   reset: '恢复默认',
+  cliChecking: '检查中…',
+  cliReady: '可用',
+  cliMissing: '未找到',
+  cliStatusFailed: '无法读取 CLI 状态。',
+  install: '安装',
+  installing: '安装中…',
+  installFailed: '无法安装 CLI。',
+  promoTitle: 'Agentero 桌面版',
+  promoDescription: '本地优先的科研工作台：论文、PDF 阅读、笔记与引用集中在一处。',
+  promoGithub: 'GitHub',
+  promoDownload: '下载',
   loadFailed: '无法读取当前知识库。',
   unavailable: '当前部署不提供这项设置。',
 }
@@ -88,8 +139,13 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
   const [canPick, setCanPick] = useState(false)
   const [picking, setPicking] = useState(false)
   const [applying, setApplying] = useState(false)
+  const [creating, setCreating] = useState(false)
   const [vaultError, setVaultError] = useState('')
   const [saved, setSaved] = useState(false)
+  const [cli, setCli] = useState<SettingsCliStatus | null>(null)
+  const [cliLoading, setCliLoading] = useState(true)
+  const [cliError, setCliError] = useState('')
+  const [installing, setInstalling] = useState(false)
   const saving = useRef(false)
 
   useEffect(() => {
@@ -106,6 +162,18 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
   }, [props.loadVault, t])
 
   useEffect(() => {
+    let cancelled = false
+    props.loadCli().then((status) => {
+      if (!cancelled) setCli(status)
+    }).catch((error: unknown) => {
+      if (!cancelled) setCliError(messageOf(error, t('cliStatusFailed')))
+    }).finally(() => {
+      if (!cancelled) setCliLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [props.loadCli, t])
+
+  useEffect(() => {
     if (state.saving) {
       saving.current = true
       setSaved(false)
@@ -116,7 +184,18 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
     if (!state.failed) setSaved(true)
   }, [state.saving, state.failed])
 
-  const busy = picking || applying
+  useEffect(() => {
+    if (!saved) return
+    let cancelled = false
+    props.loadCli().then((status) => {
+      if (!cancelled) setCli(status)
+    }).catch(() => {
+      // The saved path stays visible; the next settings open retries the probe.
+    })
+    return () => { cancelled = true }
+  }, [saved, props.loadCli])
+
+  const busy = picking || applying || creating
   const draft = vaultDraft.trim()
   const vaultReady = draft !== '' && draft !== vault && !busy
   const disabled = !state.writable || state.saving
@@ -149,6 +228,33 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
     }
   }
 
+  const createVault = async (): Promise<void> => {
+    setCreating(true)
+    setVaultError('')
+    try {
+      const path = await props.pickVault()
+      if (path === null) return
+      await props.createVault(path)
+      props.reload()
+    } catch (error) {
+      setVaultError(messageOf(error, t('createFailed')))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const installCli = async (): Promise<void> => {
+    setInstalling(true)
+    setCliError('')
+    try {
+      setCli(await props.installCli())
+    } catch (error) {
+      setCliError(messageOf(error, t('installFailed')))
+    } finally {
+      setInstalling(false)
+    }
+  }
+
   return <div className="agentero-settings agentero-surface flex flex-col gap-6 py-1">
     <section className="flex flex-col gap-2">
       <h3 className="m-0 text-[0.875rem] font-normal">{t('vaultTitle')}</h3>
@@ -165,6 +271,9 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
         {canPick ? <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => { void pick() }}>
           <FolderOpen aria-hidden />{t('choose')}
         </Button> : null}
+        {canPick ? <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => { void createVault() }}>
+          <FolderPlus aria-hidden />{creating ? t('creating') : t('createVault')}
+        </Button> : null}
         <Button type="button" size="sm" disabled={!vaultReady} onClick={() => { void applyVault() }}>
           {applying ? t('applying') : t('apply')}
         </Button>
@@ -173,7 +282,30 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
     </section>
 
     <section className="flex flex-col gap-2">
-      <h3 className="m-0 text-[0.875rem] font-normal">{t('cliTitle')}</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="m-0 text-[0.875rem] font-normal">{t('cliTitle')}</h3>
+        <div className="flex items-center gap-2">
+          {cli === null
+            ? <span className="text-xs text-muted-foreground">{cliLoading ? t('cliChecking') : t('cliStatusFailed')}</span>
+            : cli.available
+              ? <span className="flex items-center gap-1 text-xs text-muted-foreground" title={cli.bin ?? undefined}>
+                <Check className="size-3" aria-hidden />{t('cliReady')}{cli.version === null ? '' : ` · v${cli.version}`}
+              </span>
+              : <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <AlertCircle className="size-3" aria-hidden />{t('cliMissing')}
+              </span>}
+          {state.available
+            ? <Button
+              type="button"
+              size="sm"
+              disabled={installing || (cli !== null && !cli.canInstall)}
+              onClick={() => { void installCli() }}
+            >
+              <Download aria-hidden />{installing ? t('installing') : t('install')}
+            </Button>
+            : null}
+        </div>
+      </div>
       {!state.available
         ? <p role="status" className="text-xs text-muted-foreground">{t('unavailable')}</p>
         : <div className="flex items-center gap-2">
@@ -193,8 +325,38 @@ export function AgenteroSettings(props: AgenteroSettingsProps) {
             {state.saving ? t('saving') : t('save')}
           </Button>
         </div>}
+      {cliError !== '' ? <p role="status" className="text-xs text-destructive">{cliError}</p> : null}
       {state.failed ? <p role="status" className="text-xs text-destructive">{t('saveFailed')}</p> : null}
       {saved && !state.failed ? <p className="flex items-center gap-1 text-xs text-muted-foreground"><Check className="size-3" aria-hidden />{t('saved')}</p> : null}
+    </section>
+
+    <section className="rounded-xl border border-border bg-muted/30 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="m-0 flex items-center gap-2 text-[0.875rem] font-normal">
+            <BookOpen className="size-4" aria-hidden />{t('promoTitle')}
+          </h3>
+          <p className="m-0 mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">{t('promoDescription')}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <a
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            href="https://github.com/poco-ai/Agentero"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Github aria-hidden />{t('promoGithub')}
+          </a>
+          <a
+            className={buttonVariants({ variant: 'default', size: 'sm' })}
+            href="https://github.com/poco-ai/Agentero/releases/latest"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Download aria-hidden />{t('promoDownload')}
+          </a>
+        </div>
+      </div>
     </section>
   </div>
 }

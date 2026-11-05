@@ -4,9 +4,11 @@ import { lstat, readFile, realpath, rename, rm, writeFile } from 'node:fs/promis
 import type { ChildProcess } from 'node:child_process'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
+import * as path from 'node:path'
 import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
+import { cliStatus, installManagedCli } from './cli-install.js'
 import { cliFailure, runAgentero } from './cli-run.js'
 import {
   changeTag, deletePaper, discoverArxiv, downloadPaper, exportBib, importBib, importId, setRead,
@@ -73,6 +75,11 @@ interface HostSettings {
 const API_PREFIX = '/agentero/api'
 const VAULT_PATH = '/agentero/api/vault'
 const VAULT_PICK_PATH = '/agentero/api/vault/pick'
+const VAULT_CREATE_PATH = '/agentero/api/vault/create'
+
+/** Downloaded CLI status and one-click install for the settings page. */
+const CLI_STATUS_PATH = '/agentero/api/cli'
+const CLI_INSTALL_PATH = '/agentero/api/cli/install'
 
 /** Paper list route. */
 const PAPERS_PATH = '/agentero/api/papers'
@@ -124,6 +131,9 @@ const DISCOVER_PATH = '/agentero/api/discover'
 
 /** Bound for one `paper list` or `mark list` process. A timeout kills the child. */
 const PAPER_LIST_TIMEOUT_MS = 20_000
+
+/** Scaffolding a vault writes the catalog and bundled skills. */
+const VAULT_CREATE_TIMEOUT_MS = 60_000
 
 /** `mark add` may run PDFium and a translation request. */
 const MARK_ADD_TIMEOUT_MS = 90_000
@@ -873,6 +883,86 @@ function requirePost(req: IncomingMessage, res: ServerResponse): boolean {
   return false
 }
 
+/** JSON + same-origin keeps a website from opening a chooser or spending local actions. */
+function trustedJsonRequest(req: IncomingMessage, res: ServerResponse): boolean {
+  const origin = req.headers.origin
+  if ((origin !== undefined && origin !== `http://${req.headers.host}` && origin !== `https://${req.headers.host}`)
+    || !req.headers['content-type']?.toLowerCase().startsWith('application/json')) {
+    sendJson(res, 403, { error: 'invalid origin' })
+    return false
+  }
+  return true
+}
+
+async function handleCliStatus(
+  settings: HostSettings,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  if (req.method !== 'GET') {
+    res.statusCode = 405
+    res.setHeader('allow', 'GET')
+    res.end()
+    return
+  }
+  sendJson(res, 200, await cliStatus(settings))
+}
+
+async function handleCliInstall(
+  settings: HostSettings,
+  req: IncomingMessage,
+  res: ServerResponse,
+  persistBin: (bin: string) => Promise<void>,
+): Promise<void> {
+  if (!requirePost(req, res) || !trustedJsonRequest(req, res)) return
+  sendJson(res, 200, { status: await installManagedCli(settings, persistBin) })
+}
+
+async function handleVaultCreate(
+  settings: HostSettings,
+  req: IncomingMessage,
+  res: ServerResponse,
+  children: Set<ChildProcess>,
+  vaultHost: VaultHost,
+): Promise<void> {
+  if (!requirePost(req, res) || !trustedJsonRequest(req, res)) return
+  const body = await readObject(req, res)
+  if (body === undefined) return
+  const input = typeof body.path === 'string' ? body.path.trim() : ''
+  if (input === '' || !path.isAbsolute(input)) {
+    sendJson(res, 400, { error: 'invalid path' })
+    return
+  }
+  const result = await runAgentero(
+    settings.agenteroBin,
+    ['--json', 'vault', 'create', input],
+    VAULT_CREATE_TIMEOUT_MS,
+    children,
+  )
+  if (result.timedOut || result.spawnError !== undefined || result.code !== 0) {
+    sendJson(res, 502, { error: cliFailure(result, 'agentero vault create') })
+    return
+  }
+  let created = input
+  try {
+    const parsed = JSON.parse(result.stdout) as { ok?: unknown, data?: unknown }
+    if (parsed.ok !== true) throw new Error('command failed')
+    if (parsed.data !== null && typeof parsed.data === 'object' && 'path' in parsed.data
+      && typeof parsed.data.path === 'string' && parsed.data.path !== '') {
+      created = parsed.data.path
+    }
+  } catch {
+    sendJson(res, 502, { error: 'agentero vault create returned invalid JSON' })
+    return
+  }
+  try {
+    sendJson(res, 200, await vaultHost.save(created))
+  } catch (error) {
+    if (error instanceof Error && error.message === 'invalid vault') sendJson(res, 400, { error: 'invalid vault' })
+    else throw error
+  }
+}
+
 async function sendCatalog(
   res: ServerResponse,
   result: { status: 200, raw: string } | { status: 502, error: string },
@@ -1029,6 +1119,7 @@ async function handleApi(
   children: Set<ChildProcess>,
   vaultHost: VaultHost,
   translate: TranslateText,
+  persistBin: (bin: string) => Promise<void>,
 ): Promise<void> {
   if (!isLoopbackHost(req.headers.host)) {
     res.statusCode = 403
@@ -1046,6 +1137,18 @@ async function handleApi(
     sendJson(res, 409, { error: 'vault changed' })
     return
   }
+  if (pathname === CLI_STATUS_PATH) {
+    await handleCliStatus(settings, req, res)
+    return
+  }
+  if (pathname === CLI_INSTALL_PATH) {
+    await handleCliInstall(settings, req, res, persistBin)
+    return
+  }
+  if (pathname === VAULT_CREATE_PATH) {
+    await handleVaultCreate(settings, req, res, children, vaultHost)
+    return
+  }
   if (pathname === VAULT_PATH || pathname === VAULT_PICK_PATH) {
     const expectedMethod = pathname === VAULT_PATH ? 'PUT' : 'POST'
     if (req.method !== expectedMethod) {
@@ -1054,13 +1157,7 @@ async function handleApi(
       res.end()
       return
     }
-    // JSON + same-origin prevents a website from opening a host chooser or changing the profile.
-    const origin = req.headers.origin
-    if ((origin !== undefined && origin !== `http://${req.headers.host}` && origin !== `https://${req.headers.host}`)
-      || !req.headers['content-type']?.toLowerCase().startsWith('application/json')) {
-      sendJson(res, 403, { error: 'invalid origin' })
-      return
-    }
+    if (!trustedJsonRequest(req, res)) return
     if (pathname === VAULT_PICK_PATH) {
       if (!vaultHost.canPick()) { sendJson(res, 409, { error: 'directory picker unavailable' }); return }
       const controller = new AbortController()
@@ -1188,6 +1285,10 @@ export function apply(ctx: Context, config?: Config): void {
       return vaultInfo(next, canPick)
     },
   }
+  const persistBin = async (bin: string): Promise<void> => {
+    const writer = ctx.get('settings') as SettingsLike
+    await writer.mutate('agentero-host', [{ op: 'set', path: ['agenteroBin'], value: bin }])
+  }
   ctx.effect(() => {
     console.log('[agentero] plugin loaded')
     const children = new Set<ChildProcess>()
@@ -1199,7 +1300,7 @@ export function apply(ctx: Context, config?: Config): void {
     const route: WebRoute = {
       kind: 'prefix',
       path: API_PREFIX,
-      handler: (req, res) => handleApi(settings, agents, req, res, children, vaultHost, translate).catch((error: unknown) => {
+      handler: (req, res) => handleApi(settings, agents, req, res, children, vaultHost, translate, persistBin).catch((error: unknown) => {
         if (res.headersSent) return
         const message = error instanceof Error ? error.message : String(error)
         sendJson(res, 502, { error: message })
