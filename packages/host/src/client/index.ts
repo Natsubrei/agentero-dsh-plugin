@@ -3,7 +3,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import { AgenteroSettings, en as settingsEn, zh as settingsZh, type SettingsFace } from './settings'
+import { AgenteroSettings, en as settingsEn, zh as settingsZh, type SettingsCliStatus, type SettingsFace } from './settings'
 import { AgenteroSettingsModel, type AgenteroCliSettings } from './settings-model'
 
 export interface VaultInfo {
@@ -186,6 +186,30 @@ export function apply(ctx: Context): void {
         method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }),
       })
       if (!response.ok) throw new Error(failureText(await bodyOf(response)) ?? 'invalid vault')
+    },
+    async createVault(path) {
+      const response = await agentero.request('/agentero/api/vault/create', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }),
+      })
+      if (!response.ok) throw new Error(failureText(await bodyOf(response)) ?? 'could not create vault')
+    },
+    async loadCli() {
+      const response = await agentero.request('/agentero/api/cli', { cache: 'no-store' })
+      const body = await bodyOf(response)
+      if (!response.ok || body === null || typeof body !== 'object') {
+        throw new Error(failureText(body) ?? 'CLI status unavailable')
+      }
+      return body as SettingsCliStatus
+    },
+    async installCli() {
+      const response = await agentero.request('/agentero/api/cli/install', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+      })
+      const body = await bodyOf(response)
+      if (!response.ok || body === null || typeof body !== 'object') {
+        throw new Error(failureText(body) ?? 'CLI install failed')
+      }
+      return body as SettingsCliStatus
     },
     reload() { window.location.reload() },
   }

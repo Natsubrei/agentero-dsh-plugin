@@ -1,7 +1,8 @@
 {
   "name": "agentero-dsh-pdf",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Agentero PDF panel for DeepSeek Harness",
+  "homepage": "https://github.com/poco-ai/Agentero",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
