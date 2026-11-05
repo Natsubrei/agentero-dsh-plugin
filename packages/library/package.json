@@ -1,6 +1,6 @@
 {
   "name": "@poco-ai/agentero-dsh-library",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publishConfig": {
     "access": "public"
   },
