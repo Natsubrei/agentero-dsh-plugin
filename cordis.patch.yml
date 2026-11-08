@@ -1,9 +1,9 @@
 - insert:
     - id: agentero-host
-      name: '@poco-ai/agentero-dsh-host'
+      name: 'agentero-dsh-host'
     - id: agentero-library
-      name: '@poco-ai/agentero-dsh-library'
+      name: 'agentero-dsh-library'
     - id: agentero-notes
-      name: '@poco-ai/agentero-dsh-notes'
+      name: 'agentero-dsh-notes'
     - id: agentero-pdf
-      name: '@poco-ai/agentero-dsh-pdf'
+      name: 'agentero-dsh-pdf'

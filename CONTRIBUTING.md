@@ -67,7 +67,7 @@ corepack pnpm dsh plugin --profile web add ../agentero-dsh-plugin
 corepack pnpm dsh web --dump-config
 ```
 
-`--dump-config` 里应能看到 `# == @poco-ai/agentero-dsh`，以及 `agentero-host`、`agentero-library`、`agentero-notes`、`agentero-pdf` 四行。
+`--dump-config` 里应能看到 `# == agentero-dsh`，以及 `agentero-host`、`agentero-library`、`agentero-notes`、`agentero-pdf` 四行。
 
 Vault 可以在文献面板顶部的「选择知识库」中指定：选择已有知识库根目录并打开，DSH 会保存到当前 profile，并记住最近的目录。切换前先保存笔记，切换后页面会重新载入。CLI 路径仍可在本机 profile 配置；也可手动配置 Vault。不要把本机路径写进会提交的 `cordis.patch.yml`。编辑 `~/.dsh/profiles/web/cordis.patch.yml`（设置了 `DSH_HOME` 时是 `$DSH_HOME/profiles/web/cordis.patch.yml`）。后一层会整段替换目标行的 `config`，不会按键合并，所以两个字段写在一起：
 
@@ -91,7 +91,7 @@ corepack pnpm dsh web --no-open
 卸下插件：
 
 ```sh
-corepack pnpm dsh plugin --profile web remove @poco-ai/agentero-dsh
+corepack pnpm dsh plugin --profile web remove agentero-dsh
 ```
 
 profile 目录不属于任何一个 Git 仓库。
@@ -103,13 +103,13 @@ profile 目录不属于任何一个 Git 仓库。
 ```yaml
 - insert:
     - id: agentero-host
-      name: '@poco-ai/agentero-dsh-host'
+      name: 'agentero-dsh-host'
     - id: agentero-library
-      name: '@poco-ai/agentero-dsh-library'
+      name: 'agentero-dsh-library'
     - id: agentero-notes
-      name: '@poco-ai/agentero-dsh-notes'
+      name: 'agentero-dsh-notes'
     - id: agentero-pdf
-      name: '@poco-ai/agentero-dsh-pdf'
+      name: 'agentero-dsh-pdf'
 ```
 
 每个包的 Node 入口导出 `name` 与 `apply`。带界面的包另外声明 `dsh.client.platform: web`，`exports["./client"]` 指向 `lib/client.js`。这个文件以 `window.__ModuleLoader__.load` 开头，React 和 `@deepseek-ai/dsh-client-*` 保持为外部 `require()`。
@@ -156,7 +156,7 @@ corepack pnpm dsh web --patch ../agentero-dsh-plugin/dev.patch.yml --no-open
 
 插件按产物分发：发布时构建，用户装到的是 `lib/`，安装阶段不执行构建脚本，也不需要 `allowBuilds`。
 
-发布由 GitHub Actions 完成：推送 `v*` 标签后，`.github/workflows/release.yml` 会安装依赖、做类型检查、构建、校验标签与六个包的版本一致，然后按拓扑顺序先发子包、再发根包。仓库或组织的 Actions secrets 里需要有 `NPM_TOKEN`，它对 `@poco-ai` scope 有发布权限。
+发布由 GitHub Actions 完成：推送 `v*` 标签后，`.github/workflows/release.yml` 会安装依赖、做类型检查、构建、校验标签与六个包的版本一致，然后按拓扑顺序先发子包、再发根包。仓库或组织的 Actions secrets 里需要有 `NPM_TOKEN`，它来自有这几个包发布权限的 npm 账号。
 
 发版步骤：
 
@@ -188,20 +188,20 @@ corepack pnpm release
 
 `npm publish` 只认 `--otp`。账号开了 2FA 时把验证码通过 `npm_config_otp` 传进去，例如 `npm_config_otp=123456 corepack pnpm release`。
 
-`@poco-ai` 这个 scope 需要先在 npm 上存在（组织或用户名），六个包都发布在它下面：
+这些包不带 scope，可以直接由个人 npm 账号发布，包名在 npm 上全局唯一，六个包分别是：
 
 | 包 | 用途 |
 | --- | --- |
-| `@poco-ai/agentero-dsh` | 组合包，声明 `dsh.bundle` |
-| `@poco-ai/agentero-dsh-host` | Host 与设置页 |
-| `@poco-ai/agentero-dsh-library` | 文献库面板 |
-| `@poco-ai/agentero-dsh-notes` | 笔记面板 |
-| `@poco-ai/agentero-dsh-pdf` | PDF 面板 |
+| `agentero-dsh` | 组合包，声明 `dsh.bundle` |
+| `agentero-dsh-host` | Host 与设置页 |
+| `agentero-dsh-library` | 文献库面板 |
+| `agentero-dsh-notes` | 笔记面板 |
+| `agentero-dsh-pdf` | PDF 面板 |
 
 用户安装：
 
 ```sh
-dsh plugin --profile web add @poco-ai/agentero-dsh
+dsh plugin --profile web add agentero-dsh
 ```
 
 不要再从 `github:` 安装：Git 安装拿到的是源码，pnpm 会拦截 `prepare`，而用户 profile 里的 `allowBuilds` 键带有 commit hash、每次推送都会失效。npm 包里已经包含构建产物。

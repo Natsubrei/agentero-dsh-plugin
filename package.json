@@ -1,6 +1,6 @@
 {
-  "name": "@poco-ai/agentero-dsh",
-  "version": "0.1.5",
+  "name": "agentero-dsh",
+  "version": "0.1.6",
   "description": "DeepSeek Harness bundle that connects Agentero to dsh",
   "homepage": "https://github.com/poco-ai/Agentero",
   "type": "module",
@@ -18,19 +18,16 @@
     "bump": "node scripts/bump-version.mjs",
     "release": "pnpm build && pnpm -r publish --registry=https://registry.npmjs.org"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
   },
   "dependencies": {
-    "@poco-ai/agentero-dsh-host": "workspace:^",
-    "@poco-ai/agentero-dsh-library": "workspace:^",
-    "@poco-ai/agentero-dsh-notes": "workspace:^",
-    "@poco-ai/agentero-dsh-pdf": "workspace:^"
+    "agentero-dsh-host": "workspace:^",
+    "agentero-dsh-library": "workspace:^",
+    "agentero-dsh-notes": "workspace:^",
+    "agentero-dsh-pdf": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.6-alpha.2",

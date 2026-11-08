@@ -1,9 +1,6 @@
 {
-  "name": "@poco-ai/agentero-dsh-notes",
-  "version": "0.1.5",
-  "publishConfig": {
-    "access": "public"
-  },
+  "name": "agentero-dsh-notes",
+  "version": "0.1.6",
   "description": "Agentero notes panel for DeepSeek Harness",
   "homepage": "https://github.com/poco-ai/Agentero",
   "type": "module",

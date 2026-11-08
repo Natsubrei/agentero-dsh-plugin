@@ -8,16 +8,16 @@ importers:
 
   .:
     dependencies:
-      '@poco-ai/agentero-dsh-host':
+      agentero-dsh-host:
         specifier: workspace:^
         version: link:packages/host
-      '@poco-ai/agentero-dsh-library':
+      agentero-dsh-library:
         specifier: workspace:^
         version: link:packages/library
-      '@poco-ai/agentero-dsh-notes':
+      agentero-dsh-notes:
         specifier: workspace:^
         version: link:packages/notes
-      '@poco-ai/agentero-dsh-pdf':
+      agentero-dsh-pdf:
         specifier: workspace:^
         version: link:packages/pdf
     devDependencies:
