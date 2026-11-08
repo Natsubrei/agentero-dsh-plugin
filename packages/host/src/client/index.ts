@@ -3,7 +3,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import { AgenteroSettings, en as settingsEn, zh as settingsZh, type SettingsCliStatus, type SettingsFace } from './settings'
+import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
+import { AgenteroPluginSettings, AgenteroSettings, en as settingsEn, zh as settingsZh, type SettingsCliStatus, type SettingsFace } from './settings'
 import { AgenteroSettingsModel, type AgenteroCliSettings } from './settings-model'
 
 export interface VaultInfo {
@@ -223,4 +224,10 @@ export function apply(ctx: Context): void {
     locale: SETTINGS_NS,
     inject: () => ({ ...settingsFace, ...settingsModel.inject() }),
   }, AgenteroSettings))
+  ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
+    name: 'plugins.row.config',
+    key: 'agentero-dsh#agentero-host',
+    locale: SETTINGS_NS,
+    inject: () => ({ ...settingsFace, ...settingsModel.inject() }),
+  }, AgenteroPluginSettings))
 }

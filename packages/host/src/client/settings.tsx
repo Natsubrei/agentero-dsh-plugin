@@ -1,4 +1,5 @@
-/** Agentero's section in the dsh Settings dialog. */
+/** Shared Agentero settings for the Settings dialog and Plugins page. */
+import type { PluginConfigViewProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { AlertCircle, BookOpen, Check, Download, FolderOpen, FolderPlus, Github, LoaderCircle } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -50,6 +51,7 @@ export type AgenteroSettingsProps =
   & InjectFace<AgenteroFace>
 
 export type SettingsLocaleKey =
+  | 'pluginSummary'
   | 'nav' | 'vaultTitle' | 'vaultPlaceholder' | 'choose' | 'apply' | 'applying' | 'invalidVault'
   | 'createVault' | 'creating' | 'createFailed'
   | 'cliTitle' | 'cliPlaceholder' | 'save' | 'saving' | 'saved' | 'saveFailed' | 'reset'
@@ -59,6 +61,7 @@ export type SettingsLocaleKey =
 
 export const en: Record<SettingsLocaleKey, string> = {
   nav: 'Agentero',
+  pluginSummary: 'Configure the knowledge base and Agentero CLI.',
   vaultTitle: 'Knowledge base',
   vaultPlaceholder: '/path/to/vault',
   choose: 'Choose folder',
@@ -91,6 +94,7 @@ export const en: Record<SettingsLocaleKey, string> = {
 
 export const zh: Record<SettingsLocaleKey, string> = {
   nav: 'Agentero',
+  pluginSummary: '配置知识库和 Agentero CLI。',
   vaultTitle: '知识库',
   vaultPlaceholder: '/path/to/vault',
   choose: '选择目录',
@@ -131,7 +135,13 @@ function messageOf(error: unknown, fallback: string): string {
   return error instanceof Error && error.message !== '' ? error.message : fallback
 }
 
-/** Render the knowledge base and CLI fields inside the Settings dialog. */
+// The plugin owner supplies a generic form; both entry points use our shared model instead.
+export function AgenteroPluginSettings(props: AgenteroSettingsProps & PluginConfigViewProps) {
+  if (props.view === 'summary') return <>{props.t('pluginSummary')}</>
+  return <AgenteroSettings {...props} />
+}
+
+/** Render the shared knowledge base and CLI fields. */
 export function AgenteroSettings(props: AgenteroSettingsProps) {
   const { t } = props
   const state = props.useAgenteroSettings(snapshot => snapshot)

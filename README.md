@@ -43,7 +43,7 @@ dsh plugin --profile web add agentero-dsh
 dsh web --no-open
 ```
 
-看到 `[agentero] plugin loaded` 后打开终端打印的链接。点侧边栏「更多」→「设置」→「Agentero」：
+看到 `[agentero] plugin loaded` 后打开终端打印的链接。在侧边栏「插件」中打开 `agentero-dsh`，点击 `agentero-host` 行的「配置」；也可以从「更多」→「设置」→「Agentero」进入同一份配置表单：
 
 - **Agentero CLI**：点右侧「安装」会从 GitHub Release 下载与本机匹配的官方 CLI，校验 SHA-256 后写入用户目录，并把可执行文件路径填好。桌面端已经装过 CLI 时可直接复用。
 - **新建知识库**：选择一个目录，插件调用 `agentero vault create` 生成 `papers/`、`notes/`、`.agentero/catalog.sqlite` 等结构并切换过去。已有 Vault 仍用「选择目录」打开。
