@@ -1,12 +1,12 @@
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { InjectFace, PropsLocale, PropsRuntime, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { cn } from './cn'
 import { EmbedReader, type SelectionHit } from './embed-reader'
 import type { EditableBookmark } from './bookmark'
 import { type PdfPaperTone } from './page-theme'
 import { DEFAULT_HIGHLIGHT_COLOR, type HighlightColor } from './palette'
 import { PDF_FLOAT_CARD } from './pdf-chrome-surface'
-import { lastSegment, parsePaperAddress, resourceName } from './resource-path'
+import { lastSegment, parsePaperAddress, resourceName, notesPaperPath } from './resource-path'
 import { SelectionMenu } from './selection-menu'
 import { TranslateCard } from './translate-card'
 
@@ -55,6 +55,7 @@ export interface MarkAdd {
 }
 
 export interface PdfInjected {
+  notesAvailable: { getSnapshot: () => boolean, subscribe: (listener: () => void) => () => void }
   loadPdf: (ref: string) => Promise<ArrayBuffer>
   loadMarks: (ref: string) => Promise<PaintMark[]>
   addMark: (body: MarkAdd) => Promise<string | undefined>
@@ -73,6 +74,7 @@ type PdfPanelProps =
   & PropsRuntime<'sidebar.right.pane.tab'>
   & InjectFace<PdfInjected>
   & PropsLocale<'agentero.pdf'>
+  & PropsRenderSlots<'agentero.pdf.notes'>
 
 interface MenuState {
   quote: string
@@ -111,6 +113,9 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
   const { t, sessionId, useTabInfo, loadPdf, loadMarks, addMark, ask, saveBookmarks, translate, loadLayout, resolveAddress } = props
   const navigation = useTabInfo().tab.navigation
   const paperPath = parsePaperAddress(navigation.address) ?? resolveAddress(navigation.address)
+  const notesPath = notesPaperPath(paperPath)
+  const hasNotes = useSyncExternalStore(props.notesAvailable.subscribe, props.notesAvailable.getSnapshot)
+  const [notesOpen, setNotesOpen] = useState(false)
   const [status, setStatus] = useState<'empty' | 'loading' | 'missing' | 'error' | 'ready'>('empty')
   const [message, setMessage] = useState('')
   const [bytes, setBytes] = useState<ArrayBuffer | undefined>(undefined)
@@ -336,13 +341,15 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
   else if (status === 'error') body = <p className="m-0 flex flex-1 items-center px-3 text-sm font-medium text-muted-foreground">{message}</p>
   else {
     body = bytes === undefined ? null : (
-      <div className="flex min-h-0 min-w-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col @min-[700px]/pdf:flex-row">
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {banner === '' ? null : (
             <p className={cn('m-3 whitespace-pre-wrap px-3 py-2 text-sm', PDF_FLOAT_CARD)}>{banner}</p>
           )}
           <div className="relative min-h-0 flex-1">
             <EmbedReader
+              notesOpen={notesOpen}
+              onToggleNotes={hasNotes && notesPath !== undefined ? () => setNotesOpen(value => !value) : undefined}
               bytes={bytes}
               docId={paperPath}
               marks={marks}
@@ -369,12 +376,17 @@ export function PdfPanel(props: PdfPanelProps): ReactNode {
             />
           </div>
         </div>
+        {hasNotes && notesPath !== undefined ? (
+          <aside key={notesPath} hidden={!notesOpen} aria-label={t('notes')} style={notesOpen ? undefined : { display: 'none' }} className="flex h-1/2 min-h-0 min-w-0 flex-col border-t border-border @min-[700px]/pdf:h-auto @min-[700px]/pdf:w-80 @min-[700px]/pdf:border-t-0 @min-[700px]/pdf:border-l">
+            {props.renderSlot('agentero.pdf.notes', { paperPath: notesPath })}
+          </aside>
+        ) : null}
       </div>
     )
   }
 
   return (
-    <div className="agentero-pdf agentero-surface flex h-full min-h-0 flex-col">
+    <div className="@container/pdf agentero-pdf agentero-surface flex h-full min-h-0 flex-col">
       {body}
       {translateCard === undefined || !translateCard.visible ? null : (
         <TranslateCard

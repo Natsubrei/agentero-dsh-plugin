@@ -19,6 +19,16 @@ const TAB_KIND = 'agentero.pdf'
 
 const NS = 'agentero.pdf'
 
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    'agentero.pdf.notes': {
+      kind: 'single'
+      scope: 'session'
+      owner: { paperPath: string }
+    }
+  }
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Opener registry from the host browser plugin. */
@@ -158,7 +168,7 @@ export function apply(ctx: Context): void {
     ctx.sidebarRight.openResource(paperAddress(id))
   }))
 
-  const face: Omit<PdfInjected, 'ask'> = {
+  const face: Omit<PdfInjected, 'ask' | 'notesAvailable'> = {
     resolveAddress: address => vaultRefOf(address) ?? '',
     async loadPdf(ref) {
       const response = await request(`/agentero/api/pdf?ref=${encodeURIComponent(ref)}`, { cache: 'no-store' })
@@ -231,7 +241,11 @@ export function apply(ctx: Context): void {
     name: 'sidebar.right.pane.tab',
     key: TAB_ID,
     locale: NS,
-    inject: (sessionId) => ({ ...face, ...pdfChatActions(ctx, sessionId) }),
+    children: { 'agentero.pdf.notes': { kind: 'single', scope: 'session' } },
+    inject: (sessionId) => ({ ...face, ...pdfChatActions(ctx, sessionId), notesAvailable: {
+      getSnapshot: () => ctx.slots.entries('agentero.pdf.notes').length > 0,
+      subscribe: (listener: () => void) => ctx.slots.subscribe('agentero.pdf.notes', listener),
+    } }),
   }, PdfPanel)))
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab.title',

@@ -78,6 +78,8 @@ export interface SelectionHit {
 }
 
 interface EmbedReaderProps {
+  notesOpen: boolean
+  onToggleNotes?: () => void
   bytes: ArrayBuffer
   docId: string
   marks: readonly PaintMark[]
@@ -307,6 +309,8 @@ function ReaderChrome(props: ReaderChromeProps): ReactNode {
       {menu}
       <PdfFindLayer docId={docId} hostRef={hostRef} t={t} />
       <PdfToolbar
+        notesOpen={props.notesOpen}
+        onToggleNotes={props.onToggleNotes}
         translating={translateOpen && translation.running}
         translateOpen={translateOpen}
         onToggleTranslate={() => {

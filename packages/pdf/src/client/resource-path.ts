@@ -145,3 +145,11 @@ export function resourceName(address: string): string | undefined {
   const name = file.path.slice(file.path.lastIndexOf('/') + 1)
   return name === '' ? undefined : name
 }
+
+/** Match the paper directory accepted by the notes write API. */
+export function notesPaperPath(ref: string): string | undefined {
+  const normalized = ref.replaceAll('\\', '/').replace(/\/+$/, '')
+  const match = /^(papers\/[^/]+)(?:\/[^/]+\.[pP][dD][fF])?$/.exec(normalized)
+  if (match === null || match[1] === 'papers/.' || match[1] === 'papers/..') return undefined
+  return match[1]
+}

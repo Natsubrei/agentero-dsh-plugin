@@ -3,6 +3,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-slots'
 /** PDF panel copy, Chinese source. */
 export const zh = {
   title: 'PDF',
+  notes: '论文笔记',
   empty: '从文献库打开一篇论文',
   loading: '加载中…',
   loadFailed: '无法打开 PDF',
@@ -74,6 +75,7 @@ export const zh = {
 /** PDF panel copy, English. */
 export const en: { [K in keyof typeof zh]: string } = {
   title: 'PDF',
+  notes: 'Paper notes',
   empty: 'Open a paper from the library',
   loading: 'Loading…',
   loadFailed: 'Could not open the PDF',

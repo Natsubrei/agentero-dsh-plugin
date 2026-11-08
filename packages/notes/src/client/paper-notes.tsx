@@ -1,6 +1,7 @@
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAutosave } from './autosave'
+import { waitForAutosave } from './autosave-queue'
 import { messageOf } from './messages'
 import { PlateNote } from './plate-note'
 import type { NotesFace } from './types'
@@ -26,23 +27,24 @@ export function PaperNotes({
   useEffect(() => {
     let cancelled = false
     setLoaded(false)
+    setText('')
     setFailure('')
-    void readNote(path).then((file) => {
+    void waitForAutosave(path, writeNote).then(() => readNote(path)).then((file) => {
       if (cancelled) return
       setText(file.text)
+      setLoaded(true)
     }).catch((error: unknown) => {
       if (cancelled) return
       const message = messageOf(error)
       if (message === 'not found') {
         setText('')
+        setLoaded(true)
         return
       }
       setFailure(message === '' ? t('readFailed') : message)
-    }).finally(() => {
-      if (!cancelled) setLoaded(true)
     })
     return () => { cancelled = true }
-  }, [path, readNote, t])
+  }, [path, readNote, writeNote, t])
 
   return (
     <div className={ROOT}>

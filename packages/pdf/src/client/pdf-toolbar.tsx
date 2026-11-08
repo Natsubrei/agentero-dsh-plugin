@@ -1,5 +1,5 @@
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { Languages, Loader2 } from 'lucide-react'
+import { Languages, Loader2, NotebookPen } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Button } from './button'
 import { cn } from './cn'
@@ -10,11 +10,15 @@ type PdfT = PropsLocale<'agentero.pdf'>['t']
 
 /** Top-right chrome: full-text translate. */
 export function PdfToolbar({
+  notesOpen,
+  onToggleNotes,
   translating,
   translateOpen,
   onToggleTranslate,
   t,
 }: {
+  notesOpen: boolean
+  onToggleNotes?: () => void
   translating: boolean
   translateOpen: boolean
   onToggleTranslate: () => void
@@ -30,6 +34,17 @@ export function PdfToolbar({
             PDF_CHROME_CHIP,
           )}
         >
+          {onToggleNotes === undefined ? null : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button type="button" size="icon-xs" variant={notesOpen ? 'secondary' : 'ghost'}
+                  aria-pressed={notesOpen} aria-label={t('notes')} onClick={onToggleNotes}>
+                  <NotebookPen className="size-3.5" aria-hidden />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('notes')}</TooltipContent>
+            </Tooltip>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

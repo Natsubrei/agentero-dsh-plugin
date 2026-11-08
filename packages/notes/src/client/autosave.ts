@@ -1,41 +1,31 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { createAutosaveQueue } from './autosave-queue'
 import { messageOf } from './messages'
 
-/** Writes markdown after a short pause. Callers only pass text the user changed. */
+/** Save user edits after a pause; flush the original document when leaving it. */
 export function useAutosave(
   path: string,
   write: (path: string, text: string) => Promise<unknown>,
   onError: (message: string) => void,
 ): (markdown: string) => void {
-  const writeRef = useRef(write)
   const onErrorRef = useRef(onError)
-  const saved = useRef<string | null>(null)
-  const timer = useRef(0)
-  const generation = useRef(0)
-
-  writeRef.current = write
   onErrorRef.current = onError
+  const active = useRef<object | undefined>(undefined)
+  const queue = useMemo(() => {
+    const writer = createAutosaveQueue(path, write, (error) => {
+      if (active.current !== writer) return
+      onErrorRef.current(error === undefined ? '' : messageOf(error))
+    })
+    return writer
+  }, [path, write])
 
   useEffect(() => {
-    generation.current += 1
-    saved.current = null
-    window.clearTimeout(timer.current)
-    return () => { window.clearTimeout(timer.current) }
-  }, [path])
+    active.current = queue
+    return () => {
+      active.current = undefined
+      void queue.flush()
+    }
+  }, [queue])
 
-  return (markdown: string) => {
-    if (markdown === saved.current) return
-    const current = generation.current
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => {
-      void writeRef.current(path, markdown).then(() => {
-        if (generation.current !== current) return
-        saved.current = markdown
-        onErrorRef.current('')
-      }).catch((error: unknown) => {
-        if (generation.current !== current) return
-        onErrorRef.current(messageOf(error))
-      })
-    }, 400)
-  }
+  return queue.schedule
 }

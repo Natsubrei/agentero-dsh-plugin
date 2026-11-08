@@ -44,3 +44,13 @@ test('names the PDF behind an address', () => {
   assert.equal(resourceName('dsh-resource://file/session/s2/papers/p/paper%20one.pdf'), 'paper one.pdf')
   assert.equal(resourceName('sidebar://agentero.pdf'), undefined)
 })
+
+test('maps paper directories and direct PDF files to writable notes directories', async () => {
+  const { notesPaperPath } = await import('../src/client/resource-path.ts')
+  assert.equal(notesPaperPath('papers/2026.acl-long.27'), 'papers/2026.acl-long.27')
+  assert.equal(notesPaperPath('papers/中文/paper.PDF'), 'papers/中文')
+  assert.equal(notesPaperPath('papers/p/'), 'papers/p')
+  for (const ref of ['notes/file.pdf', 'papers/../file.pdf', 'papers/./file.pdf', 'papers/group/p/paper.pdf', '', '/tmp/paper.pdf']) {
+    assert.equal(notesPaperPath(ref), undefined, ref)
+  }
+})
