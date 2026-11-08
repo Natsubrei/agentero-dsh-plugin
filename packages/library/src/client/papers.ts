@@ -23,6 +23,7 @@ export interface LibraryFace {
   removeTag(ref: string, tag: string): Promise<void>
   deletePaper(ref: string): Promise<void>
   download(ref: string): Promise<void>
+  setRead(ref: string, read: boolean): Promise<void>
 }
 
 export interface PaperTag {
@@ -37,6 +38,8 @@ export interface PaperRow {
   authors: string
   year: string
   tags: PaperTag[]
+  /** null means an older CLI omitted the reading state. */
+  isRead: boolean | null
 }
 
 export function errorText(body: unknown): string | undefined {
@@ -52,7 +55,7 @@ export function errorText(body: unknown): string | undefined {
 /**
  * Rows from the CLI JSON document.
  * `--json` prints `{ ok: true, data: [...] }`. `data` is the slim list
- * (`id`, `path`, `title`, `year`, `authors`, `tags`, `date`). A bare array
+ * (`id`, `path`, `title`, `year`, `authors`, `tags`, `date`, `is_read`). A bare array
  * or `{ items: [...] }` is accepted as well.
  */
 function paperItems(body: unknown): unknown[] | undefined {
@@ -128,6 +131,7 @@ function toRow(item: unknown, index: number): PaperRow | undefined {
     authors: authorsText(record.authors),
     year: yearText(record),
     tags: tagsFrom(record.tags),
+    isRead: typeof record.is_read === 'boolean' ? record.is_read : null,
   }
 }
 
@@ -207,4 +211,19 @@ export function bibText(body: unknown): string {
   const data = dataRecord(body)
   const content = data?.content
   return typeof content === 'string' ? content : ''
+}
+
+/** Compose reading-state and text filters without classifying unknown states as unread. */
+export function filterPapers(papers: PaperRow[], query: string, unreadOnly: boolean): PaperRow[] {
+  const needle = query.trim().toLowerCase()
+  return papers.filter(paper => (!unreadOnly || paper.isRead === false) && (
+    needle === '' || paper.title.toLowerCase().includes(needle) || paper.authors.toLowerCase().includes(needle)
+  ))
+}
+
+export async function setPaperRead(ref: string, read: boolean, request: (url: string, init?: RequestInit) => Promise<Response>): Promise<void> {
+  const body = await postJson('/agentero/api/papers/read', { ref, read }, request)
+  if (body !== null && typeof body === 'object' && 'ok' in body && body.ok === false) {
+    throw new Error(errorText(body) ?? '')
+  }
 }

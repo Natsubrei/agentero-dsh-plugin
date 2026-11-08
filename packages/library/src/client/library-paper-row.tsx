@@ -1,4 +1,4 @@
-import { BookOpen, Download, MoreHorizontal, Trash2 } from 'lucide-react'
+import { BookOpen, Check, Circle, Download, MoreHorizontal, Trash2 } from 'lucide-react'
 import { DropdownMenu } from 'radix-ui'
 import { Fragment, memo, type KeyboardEvent, type MouseEvent } from 'react'
 import {
@@ -19,6 +19,7 @@ type LibraryPaperRowProps = {
   onOpen: (ref: string) => void
   onDownload: (ref: string) => void
   onDelete: (ref: string) => void
+  onSetRead: (ref: string, read: boolean) => void
 }
 
 function ignoresRowOpen(target: EventTarget | null): boolean {
@@ -36,6 +37,7 @@ export const LibraryPaperRow = memo(function LibraryPaperRow({
   onOpen,
   onDownload,
   onDelete,
+  onSetRead,
 }: LibraryPaperRowProps) {
   const open = (): void => { onOpen(paper.openId) }
 
@@ -68,6 +70,9 @@ export const LibraryPaperRow = memo(function LibraryPaperRow({
           </DropdownMenu.Trigger>
           <LibraryMenuContent align='end' onClick={(event) => { event.stopPropagation() }} onKeyDown={(event) => { event.stopPropagation() }}>
             <LibraryMenuItem onSelect={open}><BookOpen aria-hidden />{ctx.t('openPaper')}</LibraryMenuItem>
+            <LibraryMenuItem disabled={busy || paper.openId === ''} onSelect={() => { onSetRead(paper.openId, paper.isRead !== true) }}>
+              {paper.isRead === true ? <Circle aria-hidden /> : <Check aria-hidden />}{ctx.t(paper.isRead === true ? 'markUnread' : 'markRead')}
+            </LibraryMenuItem>
             <LibraryMenuItem disabled={busy} onSelect={() => { onDownload(paper.openId) }}><Download aria-hidden />{ctx.t('download')}</LibraryMenuItem>
             <DropdownMenu.Separator className='my-1 h-px bg-border' />
             <LibraryMenuItem className='text-destructive' disabled={busy} onSelect={() => {

@@ -12,6 +12,8 @@ type LibraryTableHeaderProps = {
   onSort: (key: ColumnKey) => void
   inputValue: string
   onInputChange: (value: string) => void
+  unreadOnly: boolean
+  onUnreadOnlyChange: (value: boolean) => void
   actions: ReactNode
 }
 
@@ -22,6 +24,8 @@ export function LibraryTableHeader({
   onSort,
   inputValue,
   onInputChange,
+  unreadOnly,
+  onUnreadOnlyChange,
   actions,
 }: LibraryTableHeaderProps) {
   return (
@@ -56,23 +60,34 @@ export function LibraryTableHeader({
                   <SortIcon active={active} dir={sortDir} />
                 </button>
                 {key === 'title' ? (
-                  <div className='relative ml-1 min-w-0 flex-1'>
-                    <Search
-                      className='pointer-events-none absolute top-1/2 left-1.5 size-3 -translate-y-1/2 text-muted-foreground'
-                      aria-hidden
-                    />
-                    <Input
-                      type='search'
-                      value={inputValue}
-                      onChange={(event) => { onInputChange(event.target.value) }}
-                      aria-label={t('filter')}
-                      placeholder={t('filter')}
-                      className='h-6 border-transparent bg-muted/70 pr-1.5 pl-6 text-xs shadow-none placeholder:text-muted-foreground/70 focus-visible:border-border/60 focus-visible:bg-card'
-                      onMouseDown={(event) => { event.stopPropagation() }}
-                      onClick={(event) => { event.stopPropagation() }}
-                      onKeyDown={(event) => { event.stopPropagation() }}
-                    />
-                  </div>
+                  <>
+                    <select
+                      aria-label={t('readFilter')}
+                      value={unreadOnly ? 'unread' : 'all'}
+                      onChange={(event) => { onUnreadOnlyChange(event.target.value === 'unread') }}
+                      className='h-6 shrink-0 rounded-sm border border-border/60 bg-background px-1 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+                    >
+                      <option value='all'>{t('allPapers')}</option>
+                      <option value='unread'>{t('unreadOnly')}</option>
+                    </select>
+                    <div className='relative ml-1 min-w-0 flex-1'>
+                      <Search
+                        className='pointer-events-none absolute top-1/2 left-1.5 size-3 -translate-y-1/2 text-muted-foreground'
+                        aria-hidden
+                      />
+                      <Input
+                        type='search'
+                        value={inputValue}
+                        onChange={(event) => { onInputChange(event.target.value) }}
+                        aria-label={t('filter')}
+                        placeholder={t('filter')}
+                        className='h-6 border-transparent bg-muted/70 pr-1.5 pl-6 text-xs shadow-none placeholder:text-muted-foreground/70 focus-visible:border-border/60 focus-visible:bg-card'
+                        onMouseDown={(event) => { event.stopPropagation() }}
+                        onClick={(event) => { event.stopPropagation() }}
+                        onKeyDown={(event) => { event.stopPropagation() }}
+                      />
+                    </div>
+                  </>
                 ) : null}
               </div>
             </th>

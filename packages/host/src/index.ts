@@ -345,7 +345,7 @@ async function handlePapers(
     '--vault', settings.vault,
     '--json',
     'paper', 'list',
-    '--fields', 'year,authors,tags,date',
+    '--fields', 'year,authors,tags,date,is_read',
   ], PAPER_LIST_TIMEOUT_MS, children)
   if (result.timedOut || result.spawnError !== undefined || result.code !== 0) {
     sendJson(res, 502, { error: cliFailure(result, 'agentero paper list') })

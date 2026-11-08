@@ -13,6 +13,7 @@ import {
   errorText,
   postJson,
   readJson,
+  setPaperRead,
   type LibraryFace,
   type VaultInfo,
 } from './papers'
@@ -29,6 +30,14 @@ const zh = {
   title: '文献',
   guideDescription: '打开这个会话的文献库',
   filter: '按标题或作者筛选',
+  readFilter: '阅读状态',
+  allPapers: '全部',
+  unreadOnly: '未读',
+  read: '已读',
+  unread: '未读',
+  readUnknown: '阅读状态未知',
+  markRead: '标记已读',
+  markUnread: '标记未读',
   colTitle: '标题',
   colAuthors: '作者',
   colYear: '年份',
@@ -67,6 +76,14 @@ const en = {
   title: 'Library',
   guideDescription: 'Open the library for this session',
   filter: 'Filter by title or authors',
+  readFilter: 'Reading status',
+  allPapers: 'All',
+  unreadOnly: 'Unread',
+  read: 'Read',
+  unread: 'Unread',
+  readUnknown: 'Reading status unknown',
+  markRead: 'Mark as read',
+  markUnread: 'Mark as unread',
   colTitle: 'Title',
   colAuthors: 'Authors',
   colYear: 'Year',
@@ -200,6 +217,7 @@ export function apply(ctx: Context): void {
     async deletePaper(ref) {
       await post('/agentero/api/papers/delete', { ref })
     },
+    setRead(ref, read) { return setPaperRead(ref, read, request) },
     async download(ref) {
       await post('/agentero/api/papers/download', { ref })
     },

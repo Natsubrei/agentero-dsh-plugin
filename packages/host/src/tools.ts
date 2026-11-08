@@ -59,7 +59,7 @@ async function paperList(settings: CatalogSettings, query: string, children: Set
     '--vault', settings.vault,
     '--json',
     'paper', 'list',
-    '--fields', 'year,authors,tags,date',
+    '--fields', 'year,authors,tags,date,is_read',
   ]
   if (query !== '') args.push('--query', query)
   const result = await runAgentero(settings.agenteroBin, args, 20_000, children)

@@ -7,7 +7,7 @@ import { LibraryActions } from './library-actions'
 import { controlButtonClass, sortValue, type CellCtx, type ColumnKey, type SortDir } from './library-columns'
 import { LibraryPaperRow } from './library-paper-row'
 import { LibraryTableHeader } from './library-table-header'
-import { papersFrom, shown, type LibraryFace, type PaperRow, type VaultInfo } from './papers'
+import { filterPapers, papersFrom, shown, type LibraryFace, type PaperRow, type VaultInfo } from './papers'
 
 type LibraryPanelProps =
   PropsRuntime<'sidebar.right.pane.tab'> &
@@ -40,6 +40,7 @@ export function LibraryPanel({
   removeTag,
   deletePaper,
   download,
+  setRead,
   notifyError,
   loadVault,
 }: LibraryPanelProps): ReactNode {
@@ -50,6 +51,7 @@ export function LibraryPanel({
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [query, setQuery] = useState('')
+  const [unreadOnly, setUnreadOnly] = useState(false)
   const [revision, setRevision] = useState(0)
   const [busy, setBusy] = useState(false)
   const [found, setFound] = useState<{ id: string, title: string }[]>([])
@@ -95,15 +97,10 @@ export function LibraryPanel({
   }, [loadPapers, notifyError, revision, t, vault])
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    const matched = needle === ''
-      ? papers
-      : papers.filter(paper =>
-        paper.title.toLowerCase().includes(needle) || paper.authors.toLowerCase().includes(needle))
-    const copy = [...matched]
+    const copy = filterPapers(papers, query, unreadOnly)
     copy.sort((a, b) => compareRows(a, b, sortKey, sortDir))
     return copy
-  }, [papers, query, sortKey, sortDir])
+  }, [papers, query, unreadOnly, sortKey, sortDir])
 
   /** Resolves true when the action succeeded, so callers can clear their draft. */
   const run = useCallback((action: () => Promise<void>): Promise<boolean> => {
@@ -128,6 +125,13 @@ export function LibraryPanel({
       reload()
     })
   }, [reload, removeTag, run])
+  const setReadFor = useCallback((ref: string, read: boolean): void => {
+    void run(async () => {
+      await setRead(ref, read)
+      setPapers(current => current.map(paper => paper.openId === ref ? { ...paper, isRead: read } : paper))
+      reload()
+    })
+  }, [reload, run, setRead])
   const openFor = useCallback((ref: string): void => {
     if (!openPaper(ref)) notifyError(t('pdfDisabled'))
   }, [notifyError, openPaper, t])
@@ -205,9 +209,9 @@ export function LibraryPanel({
             <col style={{ width: '24%' }} />
             <col style={{ width: '4rem' }} />
           </colgroup>
-          <LibraryTableHeader t={t} sortKey={sortKey} sortDir={sortDir} onSort={onSort} inputValue={query} onInputChange={setQuery} actions={actions} />
+          <LibraryTableHeader t={t} sortKey={sortKey} sortDir={sortDir} onSort={onSort} inputValue={query} onInputChange={setQuery} unreadOnly={unreadOnly} onUnreadOnlyChange={setUnreadOnly} actions={actions} />
           <tbody>
-            {filtered.map(paper => <LibraryPaperRow key={paper.key} paper={paper} ctx={ctx} busy={busy} onOpen={openFor} onDownload={downloadFor} onDelete={deleteFor} />)}
+            {filtered.map(paper => <LibraryPaperRow key={paper.key} paper={paper} ctx={ctx} busy={busy || loading} onSetRead={setReadFor} onOpen={openFor} onDownload={downloadFor} onDelete={deleteFor} />)}
           </tbody>
         </table>
         {filtered.length !== 0 ? null : (
@@ -218,7 +222,7 @@ export function LibraryPanel({
         )}
       </div>
       <div className='shrink-0 border-t border-border/40 px-3 py-2 text-caption tabular-nums text-muted-foreground' role='status'>
-        {t(query.trim() === '' ? 'paperCount' : 'filteredCount', { count: filtered.length, total: papers.length })}
+        {t(query.trim() === '' && !unreadOnly ? 'paperCount' : 'filteredCount', { count: filtered.length, total: papers.length })}
       </div>
     </div>
   )

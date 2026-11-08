@@ -39,11 +39,19 @@ export const COLUMN_META: Record<ColumnKey, ColumnDef> = {
   title: {
     labelKey: 'colTitle',
     headerClassName: 'min-w-[15rem]',
-    render: (paper) => (
+    render: (paper, ctx) => (
       <td className='min-w-0 max-w-0 overflow-hidden px-3 py-2.5'>
-        <span className='block w-full min-w-0 truncate text-left font-medium' title={paper.title || undefined}>
-          {paper.title || '—'}
-        </span>
+        <div className='flex min-w-0 items-center gap-2'>
+          <span
+            className={cn('size-2 shrink-0 rounded-full', paper.isRead === false ? 'bg-primary' : paper.isRead === true ? 'border border-muted-foreground/60' : 'border border-dashed border-muted-foreground/60')}
+            role='img'
+            aria-label={ctx.t(paper.isRead === null ? 'readUnknown' : paper.isRead ? 'read' : 'unread')}
+            title={ctx.t(paper.isRead === null ? 'readUnknown' : paper.isRead ? 'read' : 'unread')}
+          />
+          <span className='block w-full min-w-0 truncate text-left font-medium' title={paper.title || undefined}>
+            {paper.title || '—'}
+          </span>
+        </div>
       </td>
     ),
   },
